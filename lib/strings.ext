@@ -1,0 +1,48 @@
+# lib/strings.ext — string helpers written in Externum
+# Usage:  import strings  →  strings.reverse("abc")
+
+def reverse(s):
+    result = ""
+    for ch in s:
+        result = ch + result
+    return result
+
+
+def is_palindrome(s):
+    return s == reverse(s)
+
+
+def slugify(s):
+    result = ""
+    for ch in s:
+        if ch.isalnum():
+            result = result + ch.lower()
+        elif len(result) > 0 and result[-1] != "-":
+            result = result + "-"
+    if len(result) > 0 and result[-1] == "-":
+        result = result[:-1]
+    return result
+
+
+def word_count(text):
+    words = text.split()
+    counts = {}
+    for w in words:
+        w = w.lower()
+        if w in counts:
+            counts[w] = counts[w] + 1
+        else:
+            counts[w] = 1
+    return counts
+
+
+def capitalize(s):
+    if len(s) == 0:
+        return s
+    return s[0].upper() + s[1:]
+
+
+def truncate(s, max_len, suffix="..."):
+    if len(s) <= max_len:
+        return s
+    return s[:max_len - len(suffix)] + suffix

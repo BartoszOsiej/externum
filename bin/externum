@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+import sys
+sys.path.insert(0, '/home/user/Externum')
+from externum import Lexer, Parser, Compiler
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("Usage: externum <file> [--target python|binary|bash|all] [-o output]")
+        sys.exit(1)
+    
+    from externum.__main__ import main
+    main()
