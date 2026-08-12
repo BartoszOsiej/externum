@@ -1,0 +1,46 @@
+# lib/mathx.ext — math helpers written in Externum
+# Usage:  import mathx  →  mathx.fib(10)
+
+def clamp(x, lo, hi):
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x
+
+
+def is_even(n):
+    return n % 2 == 0
+
+
+def is_odd(n):
+    return not is_even(n)
+
+
+def gcd(a, b):
+    while b != 0:
+        t = b
+        b = a % b
+        a = t
+    return a
+
+
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+
+def factorial(n):
+    result = 1
+    for i in range(2, n + 1):
+        result = result * i
+    return result
+
+
+def sum_of_digits(n):
+    total = 0
+    s = str(abs(n))
+    for ch in s:
+        total = total + int(ch)
+    return total

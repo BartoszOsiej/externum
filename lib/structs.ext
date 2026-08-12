@@ -1,0 +1,76 @@
+# lib/collections.ext — data structures written in Externum
+# Usage:  import collections  →  s = collections.Stack()
+
+class Stack:
+    def __init__(self):
+        self.items = []
+
+    def push(self, item):
+        self.items.append(item)
+
+    def pop(self):
+        if len(self.items) == 0:
+            raise ValueError("pop from empty stack")
+        return self.items.pop()
+
+    def peek(self):
+        if len(self.items) == 0:
+            raise ValueError("peek from empty stack")
+        return self.items[-1]
+
+    def size(self):
+        return len(self.items)
+
+    def is_empty(self):
+        return len(self.items) == 0
+
+
+class Queue:
+    def __init__(self):
+        self.items = []
+
+    def enqueue(self, item):
+        self.items.append(item)
+
+    def dequeue(self):
+        if len(self.items) == 0:
+            raise ValueError("dequeue from empty queue")
+        return self.items.pop(0)
+
+    def size(self):
+        return len(self.items)
+
+    def is_empty(self):
+        return len(self.items) == 0
+
+
+class Counter:
+    def __init__(self, values=None):
+        self.counts = {}
+        if values is not None:
+            for v in values:
+                self.add(v)
+
+    def add(self, key, amount=1):
+        if key in self.counts:
+            self.counts[key] = self.counts[key] + amount
+        else:
+            self.counts[key] = amount
+
+    def get(self, key):
+        if key in self.counts:
+            return self.counts[key]
+        return 0
+
+    def most_common(self):
+        result = []
+        for k in self.counts:
+            result.append((k, self.counts[k]))
+        result.sort(key=lambda p: p[1], reverse=True)
+        return result
+
+    def total(self):
+        total = 0
+        for k in self.counts:
+            total = total + self.counts[k]
+        return total

@@ -1,0 +1,116 @@
+# pokedex.ext — a mini Pokémon database in Externum
+# Demonstrates: classes, inheritance, exceptions, imports, comprehensions,
+# lambdas, f-strings, dicts/lists/tuples, ternary, generators, kwargs.
+#
+# Run:  externum run examples/pokedex.ext
+
+import mathx
+import strings
+
+
+class Pokemon:
+    def __init__(self, name, types, hp=50):
+        self.name = name
+        self.types = types
+        self.hp = hp
+
+    def is_type(self, t):
+        return t in self.types
+
+    def heal(self, amount=10):
+        self.hp = self.hp + amount
+
+    def describe(self):
+        kinds = ", ".join(self.types)
+        return f"{self.name} ({kinds}) — {self.hp} HP"
+
+
+class Fire(Pokemon):
+    def __init__(self, name, hp=50):
+        Pokemon.__init__(self, name, ["fire"], hp)
+
+    def ember(self):
+        return f"{self.name} uses EMBER!"
+
+
+class Water(Pokemon):
+    def __init__(self, name, hp=50):
+        Pokemon.__init__(self, name, ["water"], hp)
+
+    def bubble(self):
+        return f"{self.name} uses BUBBLE!"
+
+
+class Grass(Pokemon):
+    def __init__(self, name, hp=50):
+        Pokemon.__init__(self, name, ["grass"], hp)
+
+
+# --- generator ---------------------------------------------------------------
+def fibonacci(n):
+    a = 0
+    b = 1
+    for _ in range(n):
+        yield a
+        t = a
+        a = b
+        b = t + b
+
+
+# --- program -----------------------------------------------------------------
+def main():
+    squad = [
+        Fire("Charmander", 39),
+        Water("Squirtle", 44),
+        Grass("Bulbasaur", 45),
+        Fire("Vulpix", 38),
+        Water("Psyduck", 50),
+    ]
+
+    print("=== Squad ===")
+    for p in squad:
+        print(p.describe())
+
+    print("\n=== Fire types (comprehension) ===")
+    fire_team = [p.name for p in squad if p.is_type("fire")]
+    print(fire_team)
+
+    print("\n=== Weakest member (lambda) ===")
+    weakest = min(squad, key=lambda p: p.hp)
+    print(f"{weakest.name} has only {weakest.hp} HP!")
+
+    weakest.heal(25)
+    print(f"After a potion: {weakest.describe()}")
+
+    print("\n=== Sorting by name (kwargs) ===")
+    for p in sorted(squad, key=lambda p: p.name):
+        print(" *", p.name)
+
+    print("\n=== Battles (exceptions) ===")
+    try:
+        raise ValueError("psyduck is confused")
+    except ValueError as e:
+        print("caught:", e)
+    finally:
+        print("battle round over")
+
+    print("\n=== Fib numbers (generator + ternary) ===")
+    nums = [f for f in fibonacci(10) if f % 2 == 0]
+    print(nums)
+    label = "even" if len(nums) % 2 == 0 else "odd"
+    print(f"count is {label}")
+
+    print("\n=== Standard library ===")
+    print("gcd(48, 36) =", mathx.gcd(48, 36))
+    print("slug:", strings.slugify("Hello World!"))
+    print("palindrome:", strings.is_palindrome("kajak"))
+
+    print("\n=== Counter (structs lib) ===")
+    import structs
+
+    c = structs.Counter(["a", "b", "a", "a", "c"])
+    print("most common:", c.most_common()[0])
+    print("total:", c.total())
+
+
+main()

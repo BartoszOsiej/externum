@@ -1,0 +1,10 @@
+# Externum example
+
+x = 0b1010
+y = 42
+print("Hello from Externum!")
+print(x + y)
+`ls -la`
+%%
+echo "Bash block"
+%%
