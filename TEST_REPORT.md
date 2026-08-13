@@ -5,8 +5,9 @@
 
 ## Whole project
 
-**✅ 118 tests · 0 failed · 0.057 s** — lexer, parser, compiler and runtime
-conformance suites (`tests/test_externum.py`, `tests/test_extra.py`).
+**✅ 120 tests · 0 failed · 0.055 s** — lexer, parser, compiler and runtime
+conformance suites (`tests/test_externum.py`, `tests/test_extra.py`),
+incl. ternary expressions and tuple-unpacking swaps.
 
 ## Notes
 

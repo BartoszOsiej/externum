@@ -110,6 +110,17 @@ class TestClassesWithBlankLines(unittest.TestCase):
         self.assertIn("HELLO", out)
 
 
+class TestTernaryAndUnpacking(unittest.TestCase):
+    def test_ternary_expression(self):
+        self.assertEqual(run_capture("print(1 if True else 2)\n"), "1\n")
+        self.assertEqual(run_capture("print(1 if False else 2)\n"), "2\n")
+        self.assertEqual(run_capture("print('a' if 3 > 2 else 'b')\n"), "a\n")
+
+    def test_tuple_unpacking_swap(self):
+        out = run_capture("a, b = 1, 2\na, b = b, a\nprint(a, b)\n")
+        self.assertIn("2 1", out)
+
+
 class TestMoreFeatures(unittest.TestCase):
     def test_multiple_assignment_style(self):
         out = run_capture("a, b = 1, 2\nprint(a + b)\n")
