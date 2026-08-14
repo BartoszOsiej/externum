@@ -6,14 +6,20 @@
 # constants per release and then compiles this file with `--protect`, so
 # the shipped artifact is self-checking AND watermarked by Externum DRM.
 #
-# Run:  python dist/nv2_launcher.ebin --key <license-key> [game args]
+# Works everywhere:
+#   * itch.io / direct download  — python nv2_launcher.ebin --key <key> [args]
+#     (key from --key or from nv2.lic written by the installer)
+#   * Epic Games Store (keyless) — EGS launcher runs the game with -EpicPortal
+#     / -EpicApp, or the platform passes NV2_KEYLESS=1; the storefront IS the
+#     ownership gate, so the HMAC check is skipped BUT binary integrity is
+#     still always enforced. Explicit --keyless also enables this mode.
 
-EXPECTED_BINARY_SHA: Str = '8a71b01f160fde2b895fa0286eb7da10b5704166d5cb531be9bcc147072170a2'
-EXPECTED_LICENSE_SHA: Str = '24d92b5fa10f85bd1182ddd8554aeb6443ea1b2e68bc3e1ed0f3fa1c46cadee8'
+EXPECTED_BINARY_SHA: Str = '8bad87457472ad40deff1cfcff4ee8262f8c2a7196fed7ae01d490ad1accd5e9'
+EXPECTED_LICENSE_SHA: Str = '3a1d4ab9d74c832b90100d3d3bd5fc9743929f6dc12f55a81148d10cf8e910fc'
 APP_ID: Str = 'nv2-engine'
 AUTHOR: Str = 'NV-2.0'
 # Patched by build_nv2.ext: './nv2_engine' on linux, 'nv2_engine.exe' on windows
-GAME_BINARY: Str = './nv2_engine'
+GAME_BINARY: Str = 'nv2_engine'
 WATERMARK: Str = 'Externum::DRM::nv2-engine::NV-2.0'
 
 # ------------------------------------------------------------- primitives
@@ -48,16 +54,54 @@ def collect_game_args(args: List[Str]) -> List[Str]:
     result: List[Any] = []
     mut i: Int = 0
     while i < len(args):
-        if args[i] == '--key':
+        a: Str = args[i]
+        if a == '--key' or a == '--keyless':
+            i = i + 2
+        elif a == '-EpicPortal' or a == '-EpicApp' or a == '-epicapp' or a == '--epic':
             i = i + 2
         else:
-            result.append(args[i])
+            result.append(a)
             i = i + 1
     return result
 
+def is_keyless(args: List[Str]) -> Bool:
+    # Keyless = explicit --keyless, NV2_KEYLESS=1, or launched through the
+    # Epic Games Store (which passes -EpicPortal / -EpicApp / -epicapp).
+    import os
+    if os.environ.get('NV2_KEYLESS', '') == '1':
+        return True
+    mut i: Int = 0
+    while i < len(args):
+        a: Str = args[i]
+        if a == '--keyless' or a == '-EpicPortal' or a == '-EpicApp':
+            return True
+        if a == '-epicapp' or a == '--epic':
+            return True
+        i = i + 1
+    return False
+
+def script_dir() -> Str:
+    import os, sys
+    mod: Any = sys.modules.get('__main__')
+    fname: Any = getattr(mod, '__file__', None)
+    if fname is None:
+        return '.'
+    return os.path.dirname(os.path.abspath(fname))
+
+def read_license_file() -> Str:
+    import os
+    lic: Str = os.path.join(script_dir(), 'nv2.lic')
+    if not os.path.isfile(lic):
+        return ''
+    fh: Any = open(lic, 'r', encoding='utf-8')
+    key: Str = fh.read().strip()
+    fh.close()
+    return key
+
 def run_game(args: List[Str]) -> Int:
-    import subprocess
-    proc: Any = subprocess.run([GAME_BINARY] + args)
+    import os, subprocess
+    full: Str = os.path.join(script_dir(), GAME_BINARY)
+    proc: Any = subprocess.run([full] + args)
     return proc.returncode
 
 # ------------------------------------------------------------------ main
@@ -66,25 +110,31 @@ def main() -> Int:
     import sys
     args: List[Str] = list(sys.argv[1:])
 
-    # 1) license gate — the key must match the embedded digest. The DRM
-    #    secret itself is never shipped, so a stolen copy of the game
-    #    still cannot mint valid keys.
-    key: Str = parse_key(args)
-    if key == '':
-        print('NV-2.0: license key required — pass --key <key>')
-        sys.exit(2)
-    if sha256_str(key) != EXPECTED_LICENSE_SHA:
-        print('NV-2.0: invalid license key')
-        sys.exit(3)
-
-    # 2) binary integrity — the game executable must match the build sha.
-    #    Patching the launcher is pointless: it is itself DRM-protected.
-    if not file_exists(GAME_BINARY):
+    # 1) binary integrity — ALWAYS enforced, even in keyless (EGS) mode, so
+    #    a tampered game binary can never run anywhere.
+    import os
+    game_path: Str = os.path.join(script_dir(), GAME_BINARY)
+    if not file_exists(game_path):
         print('NV-2.0: game binary missing — reinstall or update')
         sys.exit(4)
-    if sha256_file(GAME_BINARY) != EXPECTED_BINARY_SHA:
+    if sha256_file(game_path) != EXPECTED_BINARY_SHA:
         print('NV-2.0: game binary modified — reinstall or update')
         sys.exit(4)
+
+    # 2) license gate. Keyless mode is explicit (--keyless / NV2_KEYLESS=1)
+    #    or automatic when Epic launches the game (-EpicPortal / -EpicApp).
+    #    On EGS the storefront is the ownership gate; we still enforce binary
+    #    integrity above. On itch.io / direct downloads the HMAC gate runs.
+    keyless: Bool = is_keyless(args)
+    mut key: Str = parse_key(args)
+    if key == '':
+        key = read_license_file()
+    if key == '' and not keyless:
+        print('NV-2.0: license key required — pass --key <key> or install via nv2_installer')
+        sys.exit(2)
+    if key != '' and sha256_str(key) != EXPECTED_LICENSE_SHA:
+        print('NV-2.0: invalid license key')
+        sys.exit(3)
 
     # 3) launch the verified game
     print(WATERMARK)
