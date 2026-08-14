@@ -7,8 +7,11 @@
 #
 # Produces:
 #   dist/nv2_launcher.ebin   — DRM-protected launcher (Externum protected build)
+#   dist/nv2_installer.ebin  — DRM-protected installer (the player runs this)
 #   dist/nv2_engine[.exe]    — the release game binary
 #   dist/nv2.key             — a valid license key for this build
+# Plus, when ../NV2_ENGINE/release exists, the full release bundle is
+# refreshed (installer included) and the .tar.gz is rebuilt.
 
 import drm
 
@@ -16,6 +19,8 @@ APP_ID: Str = 'nv2-engine'
 AUTHOR: Str = 'NV-2.0'
 LAUNCHER_TEMPLATE: Str = 'tools/nv2_launcher.ext'
 GENERATED_LAUNCHER: Str = 'tools/generated/nv2_launcher.ext'
+INSTALLER_TEMPLATE: Str = 'tools/nv2_installer.ext'
+GENERATED_INSTALLER: Str = 'tools/generated/nv2_installer.ext'
 
 def arg_value(args: List[Str], flag: Str, default: Str) -> Str:
     mut i: Int = 0
@@ -31,6 +36,7 @@ def main() -> Int:
     secret: Str = arg_value(args, '--secret', '')
     target: Str = arg_value(args, '--target', 'linux')
     core: Str = arg_value(args, '--core', '../NV2_ENGINE/Core')
+    version: Str = arg_value(args, '--version', '1.0.0')
     if secret == '':
         print('build_nv2: --secret <drm-secret> is required')
         return 2
@@ -56,7 +62,7 @@ def main() -> Int:
     binary_sha: Str = drm.sha256_file(binary)
 
     # 3) patch the launcher template with this build's fingerprints
-    mut game_binary: Str = './nv2_engine'
+    mut game_binary: Str = 'nv2_engine'
     if target == 'windows':
         game_binary = 'nv2_engine.exe'
     template: Str = drm.read_text(LAUNCHER_TEMPLATE)
@@ -71,16 +77,36 @@ def main() -> Int:
     # 4) compile the launcher under Externum DRM protection
     os.makedirs('dist', exist_ok=True)
     import subprocess
-    proc: Any = subprocess.run(
+    mut proc: Any = subprocess.run(
         [sys.executable, '-m', 'externum', 'compile', GENERATED_LAUNCHER,
          '--protect', '--target', 'python',
          '--app-id', APP_ID, '--author', AUTHOR,
          '--secret', secret, '-o', 'dist/nv2_launcher.ebin'])
     if proc.returncode != 0:
-        print('build_nv2: DRM compile failed')
+        print('build_nv2: DRM compile of launcher failed')
         return 5
 
-    # 5) drop the license key + ship the binary
+    # 5) build the installer (same fingerprints, same secret)
+    itemplate: Str = drm.read_text(INSTALLER_TEMPLATE)
+    mut ipatched: Str = itemplate.replace('PATCH_ME_APP_ID', APP_ID)
+    ipatched = ipatched.replace('PATCH_ME_AUTHOR', AUTHOR)
+    ipatched = ipatched.replace('PATCH_ME_VERSION', version)
+    ipatched = ipatched.replace('PATCH_ME_LICENSE_SHA', key_sha)
+    ipatched = ipatched.replace('PATCH_ME_BINARY_SHA', binary_sha)
+    ipatched = ipatched.replace('PATCH_ME_GAME_BINARY', game_binary)
+    ifh: Any = open(GENERATED_INSTALLER, 'w', encoding='utf-8')
+    ifh.write(ipatched)
+    ifh.close()
+    proc = subprocess.run(
+        [sys.executable, '-m', 'externum', 'compile', GENERATED_INSTALLER,
+         '--protect', '--target', 'python',
+         '--app-id', APP_ID, '--author', AUTHOR,
+         '--secret', secret, '-o', 'dist/nv2_installer.ebin'])
+    if proc.returncode != 0:
+        print('build_nv2: DRM compile of installer failed')
+        return 5
+
+    # 6) drop the license key + ship the binary
     kf: Any = open('dist/nv2.key', 'w', encoding='utf-8')
     kf.write(key + '\n')
     kf.close()
@@ -90,11 +116,33 @@ def main() -> Int:
     if not drm.copy_file(binary, game_binary_out):
         print('build_nv2: could not copy binary into dist/')
         return 6
+
+    # 7) refresh the release bundle if the release dir exists
+    release_dir: Str = os.path.normpath(os.path.join(core, '..', 'release'))
+    if os.path.isdir(release_dir):
+        for fname in ['nv2_engine', 'nv2_launcher.ebin', 'nv2_installer.ebin', 'nv2.key']:
+            src: Str = os.path.join('dist', fname)
+            if os.path.isfile(src):
+                drm.copy_file(src, os.path.join(release_dir, fname))
+        tar: Str = 'nv2-engine-linux-x86_64.tar.gz'
+        if target == 'linux' and os.path.isdir(release_dir):
+            import tarfile
+            tgt: Str = os.path.join(release_dir, tar)
+            if os.path.isfile(tgt):
+                os.remove(tgt)
+            with tarfile.open(tgt, 'w:gz') as tf:
+                for fname in os.listdir(release_dir):
+                    fp: Str = os.path.join(release_dir, fname)
+                    if os.path.isfile(fp) and fname != tar:
+                        tf.add(fp, arcname=fname)
+            print('build_nv2: release bundle refreshed:', tgt)
+
     print('build_nv2: OK')
     print('  binary  sha256:', binary_sha)
     print('  license digest:', key_sha)
     print('  license key   :', key)
-    print('  run game      : python dist/nv2_launcher.ebin --key <key>')
+    print('  install game  : python3 dist/nv2_installer.ebin --key <key>')
+    print('  run game      : python3 dist/nv2_launcher.ebin --key <key>')
     return 0
 
 main()
