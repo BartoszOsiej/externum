@@ -28,6 +28,12 @@ Examples:
     run_p = sub.add_parser('run', help='Execute an .ext program')
     run_p.add_argument('file', help='Source file to run')
     run_p.add_argument('args', nargs='*', help='Arguments passed to the program')
+    run_p.add_argument('--protect', action='store_true',
+                       help='Apply the DRM stack to the program before running')
+    run_p.add_argument('--app-id', default=None, help='Application id for DRM')
+    run_p.add_argument('--author', default=None, help='Author name for DRM')
+    run_p.add_argument('--secret', default=None, help='DRM signing secret (compile-time only)')
+    run_p.add_argument('--build-id', default=None, help='Build id baked into the DRM watermark')
 
     sub.add_parser('repl', help='Start the interactive Externum shell')
 
@@ -36,6 +42,20 @@ Examples:
     comp.add_argument('--target', choices=['python', 'binary', 'bash', 'all'],
                       default='all', help='Output target')
     comp.add_argument('--output', '-o', help='Output file')
+    comp.add_argument('--protect', action='store_true',
+                      help='Embed the full DRM stack (license, watermark, tamper check, obfuscation)')
+    comp.add_argument('--app-id', default=None, help='Application id for DRM')
+    comp.add_argument('--author', default=None, help='Author name for DRM')
+    comp.add_argument('--secret', default=None, help='DRM signing secret (compile-time only)')
+    comp.add_argument('--build-id', default=None, help='Build id baked into the DRM watermark')
+
+    key = sub.add_parser('keygen', help='Generate DRM license keys')
+    key.add_argument('--app-id', required=True, help='Application id')
+    key.add_argument('--author', default='', help='Author name')
+    key.add_argument('--secret', required=True, help='Signing secret')
+    key.add_argument('--expires', type=int, default=None,
+                     help='Unix timestamp expiry (0/absent = never)')
+    key.add_argument('--count', type=int, default=1, help='How many keys')
     return p
 
 
@@ -55,7 +75,15 @@ def cmd_run(args) -> None:
     try:
         from .runtime import Runtime
 
-        Runtime().run_file(args.file, argv=args.args)
+        protect = None
+        if args.protect:
+            protect = {
+                'app_id': args.app_id or 'externum-app',
+                'author': args.author or 'unknown',
+                'secret': args.secret or 'externum-drm',
+                'build_id': args.build_id,
+            }
+        Runtime().run_file(args.file, argv=args.args, protect=protect)
     except SyntaxError as exc:
         print(f'Syntax Error: {exc}', file=sys.stderr)
         sys.exit(1)
@@ -64,6 +92,15 @@ def cmd_run(args) -> None:
     except Exception as exc:  # noqa: BLE001 - CLI boundary
         print(f'Runtime Error: {exc}', file=sys.stderr)
         sys.exit(1)
+
+
+def cmd_keygen(args) -> None:
+    from .drm import make_license
+    from . import __version__
+
+    print(f'Externum {__version__} — DRM keygen (secret is never stored)')
+    for _ in range(args.count):
+        print(make_license(args.secret, args.app_id, args.author, args.expires))
 
 
 def cmd_repl(args) -> None:
@@ -81,9 +118,38 @@ def cmd_repl(args) -> None:
 def cmd_compile(args) -> None:
     source = _read_source(args.file)
     try:
-        tokens = Lexer(source).tokenize()
-        ast = list(Parser(tokens).parse())
-        result = Compiler(ast).compile(args.target)
+        from .runtime import Runtime
+
+        protect = None
+        if args.protect:
+            protect = {
+                'app_id': args.app_id or 'externum-app',
+                'author': args.author or 'unknown',
+                'secret': args.secret or 'externum-drm',
+                'build_id': args.build_id,
+            }
+        rt = Runtime()
+        py = rt.compile_to_python(source, protect=protect)
+        if args.target == 'all':
+            # DRM-protected Python plus the raw bash/binary targets
+            tokens = Lexer(source).tokenize()
+            ast = list(Parser(tokens).parse())
+            compiled = Compiler(ast).compile('all')
+            result = {
+                'python': py,
+                'bash': compiled['bash'],
+                'binary': compiled['binary'],
+            }
+        elif args.target == 'python':
+            result = py
+        else:
+            tokens = Lexer(source).tokenize()
+            ast = list(Parser(tokens).parse())
+            result = Compiler(ast).compile(args.target)
+            if args.target == 'bash':
+                result = result['bash']
+            elif args.target == 'binary':
+                result = result['binary']
     except SyntaxError as exc:
         print(f'Syntax Error: {exc}', file=sys.stderr)
         sys.exit(1)
@@ -92,14 +158,19 @@ def cmd_compile(args) -> None:
         sys.exit(1)
 
     if args.target == 'all':
+        # bash/binary sections are embedded as comments so the combined
+        # artifact stays a valid, runnable Python file
+        def _comment(lines: str) -> str:
+            return '\n'.join('# ' + ln for ln in lines.splitlines())
+
         output = (
             '# Externum Generated Code\n'
             '# Python target:\n'
             f"{result['python']}\n\n"
-            '# Bash target:\n'
-            f"{result['bash']}\n\n"
-            '# Binary target:\n'
-            f"{result['binary']}\n"
+            '# Bash target (commentary — not Python):\n'
+            f"{_comment(result['bash'])}\n\n"
+            '# Binary target (commentary — not Python):\n'
+            f"{_comment(result['binary'])}\n"
         )
     else:
         output = result if isinstance(result, str) else '\n'.join(result)
@@ -116,7 +187,7 @@ def main(argv=None) -> None:
     argv = list(sys.argv[1:] if argv is None else argv)
 
     # Backwards compatible form: `externum file.ext [--target ...]`
-    if argv and argv[0] not in ('run', 'repl', 'compile') and not argv[0].startswith('-'):
+    if argv and argv[0] not in ('run', 'repl', 'compile', 'keygen') and not argv[0].startswith('-'):
         argv = ['compile'] + argv
 
     args = _build_parser().parse_args(argv)
@@ -124,6 +195,8 @@ def main(argv=None) -> None:
         cmd_run(args)
     elif args.command == 'repl':
         cmd_repl(args)
+    elif args.command == 'keygen':
+        cmd_keygen(args)
     else:
         cmd_compile(args)
 

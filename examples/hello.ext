@@ -1,7 +1,7 @@
-# Externum example
+# Externum example (strict language: every binding is declared + typed)
 
-x = 0b1010
-y = 42
+x: Int = 0b1010
+y: Int = 42
 print("Hello from Externum!")
 print(x + y)
 `ls -la`

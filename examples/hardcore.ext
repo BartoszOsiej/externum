@@ -1,0 +1,54 @@
+# hardcore.ext — Externum advanced-language showcase
+# The strict rules (declared types, ownership, move semantics) are the
+# language itself — just:  externum run examples/hardcore.ext
+
+# macro — compile-time metaprogramming
+macro SQUARE(x) {
+    (x) * (x)
+}
+
+trait Speaker:
+    def speak(self) -> Str:
+        pass
+
+class Dog:
+    def __init__(self, name: Str):
+        self.name = name
+    def speak(self) -> Str:
+        return 'woof'
+
+impl Speaker for Dog:
+    def speak(self) -> Str:
+        return 'woof (impl)'
+
+def main() -> Void:
+    # explicit declarations — mandatory in hard mode
+    n: Int = 5
+    s: Str = 'square'
+    print(s, SQUARE(n))
+
+    # manual memory management
+    p: Ptr[Int] = alloc(Int)
+    @p = 42
+    print('deref:', @p)
+    free(p)
+
+    # pattern matching
+    v: Int = 2
+    match v:
+        case 1:
+            print('one')
+        case n2 if n2 > 1:
+            print('greater than one:', n2)
+        case _:
+            print('other')
+
+    # concurrency
+    ch: Any = chan()
+    spawn(worker(ch))
+    print('recv:', recv(ch))
+
+def worker(ch: Any) -> Void:
+    send(ch, 99)
+
+main()

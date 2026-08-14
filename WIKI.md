@@ -20,8 +20,11 @@ pure Python 3.10+ with zero external dependencies.
 | Lexer | `externum/lexer.py` | Tokenization (bracket-aware, bash, f-strings) |
 | Parser | `externum/parser.py` | Full grammar → AST |
 | Compiler | `externum/compiler.py` | Codegen → Python / Bash / binary |
-| Runtime | `externum/runtime/` | Execution, `.ext` module loader, REPL |
-| CLI | `externum/__main__.py` | `run`, `repl`, `compile` |
+| Type checker | `externum/typesys.py` | Hard-mode static types + ownership analysis |
+| Hard mode | `externum/hardmode.py` | Macros, mandatory-declaration pipeline |
+| DRM | `externum/drm.py` | License keys, watermark, tamper-detection, obfuscation |
+| Runtime | `externum/runtime/` | Execution, `.ext` module loader, REPL, memory/concurrency helpers (`rtlib.py`) |
+| CLI | `externum/__main__.py` | `run`, `repl`, `compile`, `keygen` |
 
 ## Language features
 
@@ -151,6 +154,13 @@ externum repl                        # interactive shell
 externum program.ext --target python|bash|binary|all
 externum program.ext -o out.py
 externum --version                   # Externum 3.0.0
+
+# NV2.0 — hard mode
+externum run program.ext --hard
+
+# NV2.0 — DRM
+externum compile program.ext --protect --app-id X --author Y --secret S
+externum keygen --app-id X --author Y --secret S    # issue a license key
 ```
 
 ## Compilation pipeline
@@ -171,10 +181,62 @@ source (.ext) → Lexer → tokens → Parser → AST → Compiler → python/ba
 
 ## Tests
 
-`python3 -m unittest discover -s tests` — 118 tests covering lexer, parser,
-compiler and runtime (classes, exceptions, imports, lambdas, comprehensions,
-generators, stdlib, REPL).
+`python3 -m unittest discover -s tests` — **167 tests** covering lexer,
+parser, compiler and runtime (classes, exceptions, imports, lambdas,
+comprehensions, generators, stdlib, REPL), plus the NV2.0 suites:
+`tests/test_hardmode.py` (31: macros, match, ownership, traits, concurrency,
+esoteric operators) and `tests/test_drm.py` (16: license keys, watermark,
+tamper-detection, obfuscation, runtime guard, `drm.ext`, CLI).
 
 ## License
 
 MIT License — see LICENSE file for details.
+
+## NV2.0 — Hard Mode (`externum run --hard` / `compile --hard`)
+
+The hardcore ruleset turns Externum into a genuinely difficult language:
+
+- **Declarations are mandatory.** `x = 5` is a compile error; write
+  `x: Int = 5`. Types: `Int, Float, Str, Bool, Void, Any, Ptr[T], List[T],
+  Dict[K, V], Optional[T]`.
+- **Static typing.** `x: Int = 'nope'` fails; `Int` widens to `Float`;
+  function `-> Type` return types are enforced against `return` statements.
+- **Ownership.** `p: Ptr[Int] = alloc(Int)`; read/write via `@p`; `free(p)`
+  exactly once. Double-free, use-after-free, deref of a non-pointer and
+  `free()` of a non-pointer are **compile errors** (see `externum/typesys.py`).
+  `unsafe:` blocks skip all checks.
+- **Pattern matching.** `match x:` + `case` with literals, binds, guards
+  (`case n if n > 3:`), `[a, b]` / `(a, b)` destructuring, `_` wildcard.
+- **Traits.** `trait Speaker:` declares method stubs; `impl Speaker for Dog:`
+  must implement all of them with matching return types — else compile error.
+- **Macros.** `macro SQ(x) { (x) * (x) }` expands textually before parsing.
+- **Concurrency.** `ch = chan()`, `spawn(worker(ch))`, `send(ch, v)`,
+  `recv(ch)` (thread-backed).
+- **Esoteric operators.** `≈` (eq), `≠` (neq), `←` (assign).
+
+### Example
+```python
+p: Ptr[Int] = alloc(Int)
+@p = 42
+print(@p)     # 42
+free(p)       # double-free or @p after this line = compile error
+```
+
+## NV2.0 — DRM (`externum compile --protect`)
+
+`--protect` wraps every output with the full stack (`externum/drm.py`):
+
+1. **License** — `externum keygen --app-id X --author Y --secret S` issues
+   HMAC-SHA256 signed keys (`app_id:author:expires:sig`, base64). The
+   artifact stores only the *expected digest* — the secret never ships. At
+   runtime `EXTERNUM_LICENSE=<key>` is verified; a wrong key raises
+   `Externum DRM: invalid license key`.
+2. **Watermark** — header with app_id, author, build id and the source
+   SHA-256; a runtime-readable marker (`Externum::DRM::app::author`).
+3. **Tamper detection** — source hash + artifact self-hash embedded and
+   re-verified at startup.
+4. **Obfuscation** — string literals are base64-encoded and decoded through
+   an injected `_ext_s()` helper.
+
+Standard library `lib/drm.ext` exposes `sign`, `verify`, `watermark` in
+Externum itself.

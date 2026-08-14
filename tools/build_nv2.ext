@@ -1,0 +1,100 @@
+# build_nv2.ext — NV-2.0 release build + Externum DRM packaging.
+# Everything here is Externum (.ext): the build, the license digest, the
+# launcher patching and the protected compile. No hand-written Python.
+#
+# Usage:
+#   externum run tools/build_nv2.ext --secret <drm-secret> [--target linux|windows]
+#
+# Produces:
+#   dist/nv2_launcher.ebin   — DRM-protected launcher (Externum protected build)
+#   dist/nv2_engine[.exe]    — the release game binary
+#   dist/nv2.key             — a valid license key for this build
+
+import drm
+
+APP_ID: Str = 'nv2-engine'
+AUTHOR: Str = 'NV-2.0'
+LAUNCHER_TEMPLATE: Str = 'tools/nv2_launcher.ext'
+GENERATED_LAUNCHER: Str = 'tools/generated/nv2_launcher.ext'
+
+def arg_value(args: List[Str], flag: Str, default: Str) -> Str:
+    mut i: Int = 0
+    while i < len(args):
+        if args[i] == flag and i + 1 < len(args):
+            return args[i + 1]
+        i = i + 1
+    return default
+
+def main() -> Int:
+    import os, sys
+    args: List[Str] = list(sys.argv[1:])
+    secret: Str = arg_value(args, '--secret', '')
+    target: Str = arg_value(args, '--target', 'linux')
+    core: Str = arg_value(args, '--core', '../NV2_ENGINE/Core')
+    if secret == '':
+        print('build_nv2: --secret <drm-secret> is required')
+        return 2
+
+    # 1) build the game for the requested platform
+    mut binary: Str = core + '/target/release/nv2_engine'
+    mut cmd: List[Str] = ['cargo', 'build', '--release']
+    if target == 'windows':
+        binary = core + '/target/x86_64-pc-windows-gnu/release/nv2_engine.exe'
+        cmd = ['cargo', 'build', '--release', '--target', 'x86_64-pc-windows-gnu']
+    print('build_nv2: building', target, '...')
+    code: Int = drm.run_cwd(cmd, core)
+    if code != 0:
+        print('build_nv2: cargo build failed with exit', code)
+        return 3
+    if not drm.file_exists(binary):
+        print('build_nv2: binary not found:', binary)
+        return 4
+
+    # 2) derive the license digest (secret never ships) + binary sha
+    key: Str = drm.sign(secret, APP_ID, AUTHOR)
+    key_sha: Str = drm.sha256_str(key)
+    binary_sha: Str = drm.sha256_file(binary)
+
+    # 3) patch the launcher template with this build's fingerprints
+    mut game_binary: Str = './nv2_engine'
+    if target == 'windows':
+        game_binary = 'nv2_engine.exe'
+    template: Str = drm.read_text(LAUNCHER_TEMPLATE)
+    mut patched: Str = template.replace('PATCH_ME_BUILD_SHA', binary_sha)
+    patched = patched.replace('PATCH_ME_LICENSE_SHA', key_sha)
+    patched = patched.replace('PATCH_ME_BINARY', game_binary)
+    os.makedirs('tools/generated', exist_ok=True)
+    fh: Any = open(GENERATED_LAUNCHER, 'w', encoding='utf-8')
+    fh.write(patched)
+    fh.close()
+
+    # 4) compile the launcher under Externum DRM protection
+    os.makedirs('dist', exist_ok=True)
+    import subprocess
+    proc: Any = subprocess.run(
+        [sys.executable, '-m', 'externum', 'compile', GENERATED_LAUNCHER,
+         '--protect', '--target', 'python',
+         '--app-id', APP_ID, '--author', AUTHOR,
+         '--secret', secret, '-o', 'dist/nv2_launcher.ebin'])
+    if proc.returncode != 0:
+        print('build_nv2: DRM compile failed')
+        return 5
+
+    # 5) drop the license key + ship the binary
+    kf: Any = open('dist/nv2.key', 'w', encoding='utf-8')
+    kf.write(key + '\n')
+    kf.close()
+    mut game_binary_out: Str = 'dist/nv2_engine'
+    if target == 'windows':
+        game_binary_out = 'dist/nv2_engine.exe'
+    if not drm.copy_file(binary, game_binary_out):
+        print('build_nv2: could not copy binary into dist/')
+        return 6
+    print('build_nv2: OK')
+    print('  binary  sha256:', binary_sha)
+    print('  license digest:', key_sha)
+    print('  license key   :', key)
+    print('  run game      : python dist/nv2_launcher.ebin --key <key>')
+    return 0
+
+main()

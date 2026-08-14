@@ -1,10 +1,10 @@
-# Simple calculator in Externum
+# Simple calculator in Externum (strict language)
 
-running = 1
+mut running: Int = 1
 print("Calculator")
 
 while running:
-    a = int(input("a: "))
-    b = int(input("b: "))
+    a: Int = int(input("a: "))
+    b: Int = int(input("b: "))
     print(a + b)
     print(a * b)

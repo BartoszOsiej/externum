@@ -1,27 +1,27 @@
-# lib/collections.ext — data structures written in Externum
-# Usage:  import collections  →  s = collections.Stack()
+# lib/structs.ext — data structures written in Externum (strict language)
+# Usage:  import structs  →  s = structs.Stack()
 
 class Stack:
     def __init__(self):
         self.items = []
 
-    def push(self, item):
+    def push(self, item: Any):
         self.items.append(item)
 
-    def pop(self):
+    def pop(self) -> Any:
         if len(self.items) == 0:
             raise ValueError("pop from empty stack")
         return self.items.pop()
 
-    def peek(self):
+    def peek(self) -> Any:
         if len(self.items) == 0:
             raise ValueError("peek from empty stack")
         return self.items[-1]
 
-    def size(self):
+    def size(self) -> Int:
         return len(self.items)
 
-    def is_empty(self):
+    def is_empty(self) -> Bool:
         return len(self.items) == 0
 
 
@@ -29,48 +29,49 @@ class Queue:
     def __init__(self):
         self.items = []
 
-    def enqueue(self, item):
+    def enqueue(self, item: Any):
         self.items.append(item)
 
-    def dequeue(self):
+    def dequeue(self) -> Any:
         if len(self.items) == 0:
             raise ValueError("dequeue from empty queue")
         return self.items.pop(0)
 
-    def size(self):
+    def size(self) -> Int:
         return len(self.items)
 
-    def is_empty(self):
+    def is_empty(self) -> Bool:
         return len(self.items) == 0
 
 
 class Counter:
-    def __init__(self, values=None):
+    def __init__(self, values: Any = None):
         self.counts = {}
         if values is not None:
             for v in values:
                 self.add(v)
 
-    def add(self, key, amount=1):
+    def add(self, key: Any, amount: Int = 1):
         if key in self.counts:
             self.counts[key] = self.counts[key] + amount
         else:
             self.counts[key] = amount
 
-    def get(self, key):
+    def get(self, key: Any) -> Any:
+        # a dict lookup is statically `Any` — the honest annotation
         if key in self.counts:
             return self.counts[key]
         return 0
 
-    def most_common(self):
-        result = []
+    def most_common(self) -> List[Any]:
+        result: List[Any] = []
         for k in self.counts:
             result.append((k, self.counts[k]))
         result.sort(key=lambda p: p[1], reverse=True)
         return result
 
-    def total(self):
-        total = 0
+    def total(self) -> Int:
+        mut total: Int = 0
         for k in self.counts:
             total = total + self.counts[k]
         return total

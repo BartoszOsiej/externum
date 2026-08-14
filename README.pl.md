@@ -77,10 +77,58 @@ nums = [f for f in fibonacci(10) if f % 2 == 0]
 externum run examples/pokedex.ext
 ```
 
+## NV2.0 — Hard Mode (`--hard`) — giga trudny
+
+Uruchom dowolny program przez `externum run program.ext --hard` (albo
+`compile … --hard`), by włączyć hardcore'owy ruleset. Istniejące programy,
+które go łamią, zawodzą głośno:
+
+- **Obowiązkowe deklaracje** — każda zmienna potrzebuje `x: Typ` przed
+  użyciem; użycie niezadeklarowanej nazwy to błąd kompilacji.
+- **Statyczne typowanie** — niezgodności przypisań/zwracanych wartości są
+  odrzucane na etapie kompilacji (`Int` rozszerza się do `Float`; reszta
+  musi się zgadzać).
+- **Ręczna pamięć** — `alloc(Int)`, `free(p)`, dereferencja `@p`;
+  double-free i use-after-free to **błędy kompilacji** (ownership jest
+  egzekwowane).
+- **`match`/`case`** — pattern matching z literałami, bindami, guardami
+  i destrukcią list/krotek.
+- **Traity** — `trait X:` + `impl X for Y:`; implementacje z brakującymi
+  metodami lub złymi typami zwracanymi są odrzucane.
+- **Bloki `unsafe:`** — furtka ratunkowa: w środku pomijane są sprawdzenia.
+- **Makra** — `macro NAZWA(a, b) { … }` rozwijane w czasie kompilacji.
+- **Współbieżność** — `spawn(f(...))`, `chan()`, `send(ch, v)`, `recv(ch)`.
+- **Egzotyczne operatory** — `≠`, `≈`, `←` działają jak `!=`, `==`, `=`.
+
+```bash
+externum run examples/hardcore.ext --hard
+```
+
+## NV2.0 — DRM (`--protect`) — obfuskacja, watermark, licencja
+
+Każdy chroniony build niesie pełny stack defense-in-depth:
+
+1. **Klucze licencyjne** — podpisywane HMAC-SHA256; `externum keygen
+   --app-id X --secret S` wydaje klucze, artefakt je weryfikuje (env
+   `EXTERNUM_LICENSE`), nigdy nie osadzając sekretu.
+2. **Watermark** — nagłówek autora/aplikacji/buildu/hashu źródła w każdym
+   pliku.
+3. **Wykrywanie modyfikacji** — SHA-256 źródła + self-hash artefaktu
+   osadzone; zmodyfikowane kopie są wykrywane.
+4. **Obfuskacja** — literały stringów kodowane przez helper runtime'u.
+
+```bash
+externum compile app.ext --protect --app-id game --author buffy --secret s3cret
+EXTERNUM_LICENSE=<klucz> externum run app.ext --protect --app-id game --author buffy --secret s3cret
+```
+
+Standardowa biblioteka `drm.ext` udostępnia `sign`/`verify`/`watermark`
+w samym języku.
+
 ## Testy
 
 ```bash
-python3 -m unittest discover -s tests -v   # 118 testów
+python3 -m unittest discover -s tests -v   # 167 testów
 ```
 
 ## Struktura projektu
@@ -90,11 +138,15 @@ externum/
 ├── lexer.py          # Tokenizacja (bracket-aware, bash, f-stringi)
 ├── parser.py         # Pełna gramatyka → AST
 ├── compiler.py       # Codegen → Python / Bash / binary
-├── runtime/          # Runtime: exec, import .ext, REPL
-└── __main__.py       # CLI (run / repl / compile)
-lib/                  # Standardowa biblioteka (.ext)
-examples/             # hello, calc, pokedex
-tests/                # 118 testów jednostkowych
+├── typesys.py        # NV2.0 type checker (hard mode: typy statyczne, ownership)
+├── hardmode.py       # NV2.0 makra + pipeline hard mode
+├── drm.py            # NV2.0 DRM: klucze licencyjne, watermark, tamper-detection, obfuskacja
+├── runtime/          # Runtime: exec, import .ext, REPL (+ rtlib.py: pamięć/współbieżność)
+└── __main__.py       # CLI (run / repl / compile / keygen)
+lib/                  # Standardowa biblioteka (.ext) — w tym drm.ext
+lib/drm.ext           # NV2.0 DRM stdlib: sign / verify / watermark w Externum
+examples/             # hello, calc, pokedex, hardcore.ext
+tests/                # 167 testów jednostkowych
 WIKI.md               # Specyfikacja języka
 ```
 

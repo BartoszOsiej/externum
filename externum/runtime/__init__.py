@@ -15,6 +15,9 @@ import sys
 from ..lexer import Lexer
 from ..parser import Parser
 from ..compiler import Compiler
+from .rtlib import externum_globals
+from ..analysis import preprocess, check_or_raise
+from .. import drm
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -33,6 +36,7 @@ class _ExtLoader(importlib.abc.Loader):
         with open(self.path, 'r', encoding='utf-8') as fh:
             source = fh.read()
         code = self._runtime.compile_to_python(source)
+        module.__dict__.update(externum_globals())
         exec(compile(code, self.path, 'exec'), module.__dict__)
 
 
@@ -82,32 +86,56 @@ class Runtime:
             pass
 
     # ------------------------------------------------------------- core API
-    def compile_to_python(self, source: str) -> str:
-        tokens = self.lexer_cls(source).tokenize()
-        ast = list(self.parser_cls(tokens).parse())
-        result = self.compiler_cls(ast).compile('all')
-        return result['python']
+    def compile_to_python(self, source: str, protect: dict = None) -> str:
+        """Compile Externum source to Python.
 
-    def run(self, source: str, filename: str = '<externum>', argv=None) -> dict:
+        Externum is strict by design: macro expansion, mandatory
+        declarations, static typing and ownership enforcement run on EVERY
+        compilation — there is no relaxed mode.
+
+        - `protect={...}` — apply the full DRM stack to the output
+          (keys: app_id, author, secret, build_id).
+        """
+        processed, _macros = preprocess(source)
+        parser = self.parser_cls(self.lexer_cls(processed).tokenize())
+        ast = list(parser.parse())
+        check_or_raise(ast, parser.annotations, parser.signatures,
+                       parser.traits, parser.impls, parser.mutable)
+        result = self.compiler_cls(ast).compile('all')
+        code = result['python']
+        if protect:
+            code = drm.protect_python(
+                code,
+                app_id=protect.get('app_id', 'externum-app'),
+                author=protect.get('author', 'unknown'),
+                source=source,
+                secret=protect.get('secret', 'externum-drm'),
+                build_id=protect.get('build_id'),
+            )
+        return code
+
+    def run(self, source: str, filename: str = '<externum>', argv=None,
+            protect: dict = None) -> dict:
         """Execute an Externum program string. Returns the module namespace."""
         old_argv = sys.argv
         sys.argv = [filename] + list(argv or [])
         try:
-            return self._exec(source, filename)
+            return self._exec(source, filename, protect=protect)
         finally:
             sys.argv = old_argv
 
-    def run_file(self, path: str, argv=None) -> dict:
+    def run_file(self, path: str, argv=None, protect: dict = None) -> dict:
         path = os.path.abspath(path)
         with open(path, 'r', encoding='utf-8') as fh:
             source = fh.read()
         # let the running script import sibling .ext modules
         self._finder._roots.insert(0, os.path.dirname(path))
-        return self.run(source, filename=path, argv=argv)
+        return self.run(source, filename=path, argv=argv, protect=protect)
 
-    def _exec(self, source: str, filename: str) -> dict:
-        code = self.compile_to_python(source)
+    def _exec(self, source: str, filename: str, protect: dict = None) -> dict:
+        code = self.compile_to_python(source, protect=protect)
         ns = {'__name__': '__main__', '__file__': filename}
+        ns.update(externum_globals())
         exec(compile(code, filename, 'exec'), ns)
         return ns
 
@@ -115,6 +143,7 @@ class Runtime:
     def repl(self, banner: str = None) -> None:
         print(banner or f'Externum {_version()} — type "exit()" or Ctrl+D to quit.')
         ns = {'__name__': '__main__'}
+        ns.update(externum_globals())
         buffer = []
         while True:
             prompt = '... ' if buffer else '>>> '

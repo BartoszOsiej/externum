@@ -1,0 +1,72 @@
+# drm.ext — Externum DRM standard library (strict language)
+# License signing, verification, watermarking and file/binary integrity —
+# usable from any program. This is the security layer NV-2.0 ships with:
+# everything here is Externum source (.ext), never hand-written Python.
+
+def sign(secret: Str, app_id: Str, author: Str) -> Str:
+    import hashlib, hmac
+    payload: Str = app_id + ':' + author
+    sig: Str = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return payload + ':' + sig
+
+def verify(key: Str, secret: Str) -> Bool:
+    import hashlib, hmac
+    parts: List[Str] = key.split(':')
+    if len(parts) < 3:
+        return False
+    payload: Str = ':'.join(parts[:-1])
+    expected: Str = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(parts[-1], expected)
+
+def watermark(app_id: Str, author: Str) -> Str:
+    import base64
+    raw: Any = (app_id + '::' + author).encode()
+    return 'Externum::DRM::' + base64.b64encode(raw).decode()
+
+# ------------------------------------------------------------ file helpers
+
+def file_exists(path: Str) -> Bool:
+    import os
+    return os.path.isfile(path)
+
+def read_text(path: Str) -> Str:
+    fh: Any = open(path, 'r', encoding='utf-8')
+    data: Str = fh.read()
+    fh.close()
+    return data
+
+def sha256_file(path: Str) -> Str:
+    import hashlib
+    fh: Any = open(path, 'rb')
+    blob: Any = fh.read()
+    fh.close()
+    return hashlib.sha256(blob).hexdigest()
+
+def sha256_str(s: Str) -> Str:
+    import hashlib
+    return hashlib.sha256(s.encode()).hexdigest()
+
+def verify_key_digest(key: Str, expected_sha: Str) -> Bool:
+    # The launcher never sees the DRM secret — only the sha256 digest of a
+    # valid license key is embedded, and the key is checked against it.
+    return sha256_str(key) == expected_sha
+
+def verify_binary(path: Str, expected_sha: Str) -> Bool:
+    if not file_exists(path):
+        return False
+    return sha256_file(path) == expected_sha
+
+def run(path: Str, args: List[Str]) -> Int:
+    import subprocess
+    proc: Any = subprocess.run([path] + args)
+    return proc.returncode
+
+def run_cwd(args: List[Str], cwd: Str) -> Int:
+    import subprocess
+    proc: Any = subprocess.run(args, cwd=cwd)
+    return proc.returncode
+
+def copy_file(src: Str, dst: Str) -> Bool:
+    import shutil
+    shutil.copy2(src, dst)
+    return file_exists(dst)
