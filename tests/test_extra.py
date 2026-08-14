@@ -1,4 +1,8 @@
-"""Regression tests for Externum v3 additions."""
+"""Regression tests for Externum v3 additions (strict language).
+
+Every program runs through the strict pipeline: bindings are declared with
+types, parameters carry annotations, reassignment needs `mut`.
+"""
 
 import contextlib
 import io
@@ -21,7 +25,7 @@ def run_capture(source):
 class TestMultilineLiterals(unittest.TestCase):
     def test_multiline_list(self):
         out = run_capture(
-            "data = [\n"
+            "data: List[Int] = [\n"
             "    1,\n"
             "    2,\n"
             "    3,\n"
@@ -33,8 +37,8 @@ class TestMultilineLiterals(unittest.TestCase):
 
     def test_multiline_list_calls(self):
         out = run_capture(
-            "def f(x):\n    return x * 2\n"
-            "data = [\n"
+            "def f(x: Int) -> Int:\n    return x * 2\n"
+            "data: List[Int] = [\n"
             "    f(1),\n"
             "    f(2),\n"
             "]\n"
@@ -44,17 +48,17 @@ class TestMultilineLiterals(unittest.TestCase):
 
     def test_multiline_dict(self):
         out = run_capture(
-            "d = {\n"
+            "d: Dict[Str, Int] = {\n"
             '    "a": 1,\n'
             '    "b": 2,\n'
             "}\n"
-            "print(d[\"a\"] + d[\"b\"])\n"
+            'print(d["a"] + d["b"])\n'
         )
         self.assertIn("3", out)
 
     def test_multiline_call(self):
         out = run_capture(
-            "def f(a, b, c):\n    return a + b + c\n"
+            "def f(a: Int, b: Int, c: Int) -> Int:\n    return a + b + c\n"
             "print(f(\n"
             "    1,\n"
             "    2,\n"
@@ -65,7 +69,7 @@ class TestMultilineLiterals(unittest.TestCase):
 
     def test_multiline_nested(self):
         out = run_capture(
-            "matrix = [\n"
+            "matrix: List[List[Int]] = [\n"
             "    [1, 2],\n"
             "    [3, 4],\n"
             "]\n"
@@ -79,32 +83,32 @@ class TestClassesWithBlankLines(unittest.TestCase):
         out = run_capture(
             "class Greeter:\n"
             "\n"
-            "    def __init__(self, name):\n"
+            "    def __init__(self, name: Str):\n"
             "        self.name = name\n"
             "\n"
-            "    def hello(self):\n"
-            "        print(\"hi \" + self.name)\n"
+            "    def hello(self) -> Str:\n"
+            '        return "hi " + self.name\n'
             "\n"
-            "    def bye(self):\n"
-            "        print(\"bye \" + self.name)\n"
+            "    def bye(self) -> Str:\n"
+            '        return "bye " + self.name\n'
             "\n"
-            "g = Greeter(\"Kot\")\n"
-            "g.hello()\n"
-            "g.bye()\n"
+            'g: Any = Greeter("Kot")\n'
+            "print(g.hello())\n"
+            "print(g.bye())\n"
         )
         self.assertEqual(out.split(), ["hi", "Kot", "bye", "Kot"])
 
     def test_inherited_method_call(self):
         out = run_capture(
             "class Base:\n"
-            "    def greet(self):\n"
-            "        return \"hello\"\n"
+            "    def greet(self) -> Str:\n"
+            '        return "hello"\n'
             "\n"
             "class Child(Base):\n"
-            "    def shout(self):\n"
+            "    def shout(self) -> Str:\n"
             "        return self.greet().upper()\n"
             "\n"
-            "c = Child()\n"
+            "c: Any = Child()\n"
             "print(c.shout())\n"
         )
         self.assertIn("HELLO", out)
@@ -117,43 +121,43 @@ class TestTernaryAndUnpacking(unittest.TestCase):
         self.assertEqual(run_capture("print('a' if 3 > 2 else 'b')\n"), "a\n")
 
     def test_tuple_unpacking_swap(self):
-        out = run_capture("a, b = 1, 2\na, b = b, a\nprint(a, b)\n")
+        out = run_capture("mut a: Int = 1\nmut b: Int = 2\na, b = b, a\nprint(a, b)\n")
         self.assertIn("2 1", out)
 
 
 class TestMoreFeatures(unittest.TestCase):
     def test_multiple_assignment_style(self):
-        out = run_capture("a, b = 1, 2\nprint(a + b)\n")
+        out = run_capture("mut a: Int = 1\nmut b: Int = 2\na, b = b, a\nprint(a + b)\n")
         self.assertIn("3", out)
 
     def test_nested_lambdas(self):
         out = run_capture(
-            "add = lambda a: lambda b: a + b\nprint(add(3)(4))\n"
+            "add: Any = lambda a: lambda b: a + b\nprint(add(3)(4))\n"
         )
         self.assertIn("7", out)
 
     def test_dict_comprehension_like(self):
         out = run_capture(
-            "names = [\"ala\", \"ola\"]\n"
-            "caps = {n: n.upper() for n in names}\n"
-            "print(caps[\"ala\"])\n"
+            "names: List[Str] = [\"ala\", \"ola\"]\n"
+            "caps: Dict[Str, Str] = {n: n.upper() for n in names}\n"
+            'print(caps["ala"])\n'
         )
         self.assertIn("ALA", out)
 
     def test_chain_methods(self):
         out = run_capture(
-            's = "  a,b,c  "\n'
-            "print(s.strip().replace(\"a\", \"x\").split(\",\"))\n"
+            's: Str = "  a,b,c  "\n'
+            'print(s.strip().replace("a", "x").split(","))\n'
         )
         self.assertIn("['x', 'b', 'c']", out)
 
     def test_string_multiply(self):
-        out = run_capture('print(\"ab\" * 3)\n')
+        out = run_capture('print("ab" * 3)\n')
         self.assertIn("ababab", out)
 
     def test_list_methods(self):
         out = run_capture(
-            "a = [3, 1, 2]\n"
+            "a: List[Int] = [3, 1, 2]\n"
             "a.reverse()\nprint(a)\n"
             "a.insert(0, 9)\nprint(a[0])\n"
             "a.remove(1)\nprint(1 in a)\n"
@@ -184,7 +188,7 @@ class TestMoreFeatures(unittest.TestCase):
 
     def test_while_else(self):
         out = run_capture(
-            "i = 0\n"
+            "mut i: Int = 0\n"
             "while i < 3:\n"
             "    print(i)\n"
             "    i += 1\n"
@@ -199,12 +203,12 @@ class TestMoreFeatures(unittest.TestCase):
 
     def test_global_in_class(self):
         out = run_capture(
-            "counter = 0\n"
+            "counter: Int = 0\n"
             "class Ticker:\n"
-            "    def tick(self):\n"
+            "    def tick(self) -> Void:\n"
             "        global counter\n"
             "        counter = counter + 1\n"
-            "t = Ticker()\n"
+            "t: Any = Ticker()\n"
             "t.tick()\n"
             "t.tick()\n"
             "print(counter)\n"

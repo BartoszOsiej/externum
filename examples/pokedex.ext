@@ -1,4 +1,4 @@
-# pokedex.ext — a mini Pokémon database in Externum
+# pokedex.ext — a mini Pokémon database in Externum (strict language)
 # Demonstrates: classes, inheritance, exceptions, imports, comprehensions,
 # lambdas, f-strings, dicts/lists/tuples, ternary, generators, kwargs.
 #
@@ -9,57 +9,57 @@ import strings
 
 
 class Pokemon:
-    def __init__(self, name, types, hp=50):
+    def __init__(self, name: Str, types: List[Str], hp: Int = 50):
         self.name = name
         self.types = types
         self.hp = hp
 
-    def is_type(self, t):
+    def is_type(self, t: Str) -> Bool:
         return t in self.types
 
-    def heal(self, amount=10):
+    def heal(self, amount: Int = 10) -> Void:
         self.hp = self.hp + amount
 
-    def describe(self):
-        kinds = ", ".join(self.types)
+    def describe(self) -> Str:
+        kinds: Str = ", ".join(self.types)
         return f"{self.name} ({kinds}) — {self.hp} HP"
 
 
 class Fire(Pokemon):
-    def __init__(self, name, hp=50):
+    def __init__(self, name: Str, hp: Int = 50):
         Pokemon.__init__(self, name, ["fire"], hp)
 
-    def ember(self):
+    def ember(self) -> Str:
         return f"{self.name} uses EMBER!"
 
 
 class Water(Pokemon):
-    def __init__(self, name, hp=50):
+    def __init__(self, name: Str, hp: Int = 50):
         Pokemon.__init__(self, name, ["water"], hp)
 
-    def bubble(self):
+    def bubble(self) -> Str:
         return f"{self.name} uses BUBBLE!"
 
 
 class Grass(Pokemon):
-    def __init__(self, name, hp=50):
+    def __init__(self, name: Str, hp: Int = 50):
         Pokemon.__init__(self, name, ["grass"], hp)
 
 
 # --- generator ---------------------------------------------------------------
-def fibonacci(n):
-    a = 0
-    b = 1
+def fibonacci(n: Int):
+    mut a: Int = 0
+    mut b: Int = 1
     for _ in range(n):
         yield a
-        t = a
+        t: Int = a
         a = b
         b = t + b
 
 
 # --- program -----------------------------------------------------------------
-def main():
-    squad = [
+def main() -> Void:
+    squad: List[Pokemon] = [
         Fire("Charmander", 39),
         Water("Squirtle", 44),
         Grass("Bulbasaur", 45),
@@ -72,11 +72,12 @@ def main():
         print(p.describe())
 
     print("\n=== Fire types (comprehension) ===")
-    fire_team = [p.name for p in squad if p.is_type("fire")]
+    fire_team: List[Str] = [p.name for p in squad if p.is_type("fire")]
     print(fire_team)
 
     print("\n=== Weakest member (lambda) ===")
-    weakest = min(squad, key=lambda p: p.hp)
+    # min() is statically `Any` — the strict annotation is `Any`, not `Pokemon`
+    weakest: Any = min(squad, key=lambda p: p.hp)
     print(f"{weakest.name} has only {weakest.hp} HP!")
 
     weakest.heal(25)
@@ -95,9 +96,9 @@ def main():
         print("battle round over")
 
     print("\n=== Fib numbers (generator + ternary) ===")
-    nums = [f for f in fibonacci(10) if f % 2 == 0]
+    nums: List[Int] = [f for f in fibonacci(10) if f % 2 == 0]
     print(nums)
-    label = "even" if len(nums) % 2 == 0 else "odd"
+    label: Str = "even" if len(nums) % 2 == 0 else "odd"
     print(f"count is {label}")
 
     print("\n=== Standard library ===")
@@ -108,7 +109,7 @@ def main():
     print("\n=== Counter (structs lib) ===")
     import structs
 
-    c = structs.Counter(["a", "b", "a", "a", "c"])
+    c: Any = structs.Counter(["a", "b", "a", "a", "c"])
     print("most common:", c.most_common()[0])
     print("total:", c.total())
 

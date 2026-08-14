@@ -26,6 +26,8 @@ _PRECEDENCE = {
     '||': 1, 'OR': 1,
     '&&': 2, 'AND': 2,
     '==': 4, '!=': 4, '<': 4, '>': 4, '<=': 4, '>=': 4, 'IS': 4, 'IN': 4,
+    # NV2.0 esoteric comparison operators: ≈ (eq), ≠ (neq)
+    'EQ': 4, 'NEQ': 4,
     '|': 5, '^': 6, '&': 7,
     '<<': 8, '>>': 8,
     '+': 9, '-': 9,
@@ -40,10 +42,15 @@ _OP_TYPES = {
 }
 
 # Token values/types that are not valid Python operators.
-_OP_TO_PY = {'&&': 'and', '||': 'or', 'AND': 'and', 'OR': 'or', 'IS': 'is', 'IN': 'in'}
+_OP_TO_PY = {'&&': 'and', '||': 'or', 'AND': 'and', 'OR': 'or', 'IS': 'is', 'IN': 'in',
+              'EQ': '==', 'NEQ': '!='}
 
-# Strip type annotations from parameter lists: `n: Int` -> `n`.
-_PARAM_ANNOTATION = re.compile(r':\s*[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?')
+# Type names usable in annotations (checked in hard mode).
+KNOWN_TYPES = {'Int', 'Float', 'Str', 'Bool', 'Void', 'Any', 'Ptr', 'List', 'Dict', 'Optional'}
+
+# Strip type annotations from parameter lists: `n: Int` -> `n`,
+# `xs: List[Int]` -> `xs` (tolerates spaces around the brackets).
+_PARAM_ANNOTATION = re.compile(r':\s*[A-Za-z_][A-Za-z0-9_]*\s*(\[\s*[^\]]*\s*\])?')
 
 # Highest binary precedence (used for unary prefix operands).
 _UNARY_BIND = 10
@@ -55,6 +62,14 @@ class Parser:
         self.pos = 0
         self.ast: List[ASTNode] = []
         self._comp_depth = 0  # inside a comprehension -> no ternary
+        # NV2.0 hard-mode metadata captured during parsing
+        self.annotations: dict = {}   # variable name -> type string
+        self.mutable: set = set()      # variable names declared `mut` (reassignable)
+        self.signatures: dict = {}    # function name -> {params: [(name, type)], ret: type}
+        self.classes: dict = {}       # class name -> {methods: [(name, ret)]}
+        self.traits: dict = {}        # trait name -> {methods: [(name, params, ret)]}
+        self.impls: dict = {}         # (trait, class) -> methods
+        self.unsafe_depth = 0
 
     # ------------------------------------------------------------- top level
     def parse(self) -> List[ASTNode]:
@@ -79,6 +94,16 @@ class Parser:
             return self._parse_function_def()
         if t == 'CLASS':
             return self._parse_class_def()
+        if t == 'MATCH':
+            return self._parse_match_stmt()
+        if t == 'TRAIT':
+            return self._parse_trait_def()
+        if t == 'IMPL':
+            return self._parse_impl_def()
+        if t == 'UNSAFE':
+            return self._parse_unsafe_block()
+        if t == 'CASE':
+            return self._parse_case_branch()
         if t == 'IF':
             return self._parse_if_stmt()
         if t == 'FOR':
@@ -135,8 +160,38 @@ class Parser:
         return self._parse_assignment_or_expr()
 
     def _parse_assignment_or_expr(self) -> ASTNode:
+        # NV2.0 `mut` binding:  mut x: Int = 5   (reassignable, Rust-style)
+        if (self.pos < len(self.tokens) and self.tokens[self.pos].type == 'MUT'
+                and self.pos + 1 < len(self.tokens)
+                and self.tokens[self.pos + 1].type in ('IDENTIFIER', 'BUILTIN')):
+            self.pos += 1  # MUT
+            name = self.tokens[self.pos].value
+            self.pos += 1
+            if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'COLON':
+                self.pos += 1
+                ann = self._parse_type_annotation()
+                self.mutable.add(name)
+                if ann:
+                    self.annotations[name] = ann
+                if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'ASSIGN':
+                    self.pos += 1
+                    val = self._parse_expression()
+                    return ASTNode('ASSIGN', children=[ASTNode('IDENTIFIER', value=name), val])
+                return ASTNode('DECLARE', value=name,
+                               children=[ASTNode('TYPE', value=ann or 'Any')])
         expr = self._parse_expression()
         if self.pos < len(self.tokens):
+            # NV2.0 annotated declaration: `x: Int` or `x: Int = 5`
+            if expr.type == 'IDENTIFIER' and self.tokens[self.pos].type == 'COLON':
+                self.pos += 1
+                ann = self._parse_type_annotation()
+                if ann:
+                    self.annotations[expr.value] = ann
+                if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'ASSIGN':
+                    self.pos += 1
+                    val = self._parse_expression()
+                    return ASTNode('ASSIGN', children=[expr, val])
+                return ASTNode('DECLARE', value=expr.value, children=[ASTNode('TYPE', value=ann or 'Any')])
             nxt = self.tokens[self.pos]
             # tuple unpacking target:  a, b = 1, 2
             if nxt.type == 'COMMA' and expr.type in ('IDENTIFIER', 'INDEX', 'DOT'):
@@ -158,7 +213,7 @@ class Parser:
                 return ASTNode('EXPRESSION',
                                value=f'({chr(44)}{chr(32)}'.join(
                                    self._node_to_str(t) for t in targets) + ')')
-            if nxt.type == 'ASSIGN' and expr.type in ('IDENTIFIER', 'INDEX', 'DOT'):
+            if nxt.type == 'ASSIGN' and expr.type in ('IDENTIFIER', 'INDEX', 'DOT', 'DEREF'):
                 self.pos += 1
                 val = self._parse_expression()
                 return ASTNode('ASSIGN', children=[expr, val])
@@ -175,12 +230,26 @@ class Parser:
         name = self.tokens[self.pos].value
         self.pos += 1
         params = ''
+        param_types = []
         if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'LPAREN':
-            params = self._parse_params()
+            params, param_types = self._parse_params()
+        ret = self._capture_return_type()
         self._skip_to_colon()
         body = self._parse_block()
+        if self.unsafe_depth == 0:
+            self.signatures[name] = {'params': param_types, 'ret': ret}
+        # Attach the (name, type) pairs to the PARAMS node itself. Method
+        # signatures are keyed by bare method name, so when two classes
+        # define `__init__` the later one overwrites the earlier — attaching
+        # the types here keeps every function's own parameter annotations.
+        ptype_children = []
+        for pname, ptype in param_types:
+            ptype_children.append(
+                ASTNode('PTYPE', value=pname,
+                        children=[ASTNode('PT', value=ptype or '')]))
         return ASTNode('FUNCTION', value=name,
-                       children=[ASTNode('PARAMS', value=params)] + body)
+                       children=[ASTNode('PARAMS', value=params,
+                                         children=ptype_children)] + body)
 
     def _parse_class_def(self) -> ASTNode:
         self.pos += 1  # CLASS
@@ -188,11 +257,163 @@ class Parser:
         self.pos += 1
         bases = ''
         if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'LPAREN':
-            bases = self._parse_params()
+            bases, _ = self._parse_params()
         self._skip_to_colon()
         body = self._parse_block()
+        methods = []
+        for child in body:
+            if child.type == 'FUNCTION' and self.unsafe_depth == 0:
+                sig = self.signatures.get(child.value, {})
+                methods.append((child.value, sig.get('ret')))
+        self.classes[name] = {'methods': methods}
         return ASTNode('CLASS', value=name,
                        children=[ASTNode('PARAMS', value=bases)] + body)
+
+    # ---------------------------------------------------- NV2.0 strict stmts
+    def _parse_match_stmt(self) -> ASTNode:
+        """match EXPR:  case PATTERN [if GUARD]: BODY ..."""
+        self.pos += 1  # MATCH
+        subject = self._parse_expression()
+        self._skip_to_colon()
+        body = self._parse_block()
+        return ASTNode('MATCH', children=[subject] + body)
+
+    def _parse_case_branch(self) -> ASTNode:
+        self.pos += 1  # CASE
+        pattern = self._parse_case_pattern()
+        guard = None
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'IF':
+            self.pos += 1
+            guard = self._parse_expression()
+        self._skip_to_colon()
+        body = self._parse_block()
+        children = [ASTNode('PATTERN', value=pattern)]
+        if guard is not None:
+            children.append(ASTNode('GUARD', children=[guard]))
+        children += body
+        return ASTNode('CASE', children=children)
+
+    def _parse_case_pattern(self) -> str:
+        """Parse a case pattern: literal, ident (bind), `_` wildcard,
+        list destructure `[a, b]`, or a tuple `(a, b)`."""
+        tok = self.tokens[self.pos]
+        if tok.type == 'LBRACKET':
+            self.pos += 1
+            items = []
+            while self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RBRACKET':
+                if self.tokens[self.pos].type == 'COMMA':
+                    self.pos += 1
+                    continue
+                items.append(self._parse_case_pattern())
+            self._expect('RBRACKET')
+            return '[' + ', '.join(items) + ']'
+        if tok.type == 'LPAREN':
+            self.pos += 1
+            items = []
+            while self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RPAREN':
+                if self.tokens[self.pos].type == 'COMMA':
+                    self.pos += 1
+                    continue
+                items.append(self._parse_case_pattern())
+            self._expect('RPAREN')
+            return '(' + ', '.join(items) + ')'
+        if tok.type in ('NUMBER', 'BINARY_NUMBER'):
+            self.pos += 1
+            return str(tok.value)
+        if tok.type == 'STRING':
+            self.pos += 1
+            return tok.value
+        if tok.type in ('TRUE', 'FALSE', 'NONE'):
+            self.pos += 1
+            return {'TRUE': 'True', 'FALSE': 'False', 'NONE': 'None'}[tok.type]
+        if tok.type == 'MINUS':
+            self.pos += 1
+            val = self.tokens[self.pos]
+            self.pos += 1
+            return f'-{val.value}'
+        if tok.type in ('IDENTIFIER', 'BUILTIN'):
+            self.pos += 1
+            return tok.value  # bind name or `_` wildcard
+        self.pos += 1
+        return tok.value
+
+    def _parse_trait_def(self) -> ASTNode:
+        """trait NAME:  def m(a: Int) -> Int: ...stub..."""
+        self.pos += 1  # TRAIT
+        name = self.tokens[self.pos].value
+        self.pos += 1
+        self._skip_to_colon()
+        body = self._parse_block()
+        methods = []
+        for child in body:
+            if child.type == 'FUNCTION':
+                sig = self.signatures.pop(child.value, {'params': [], 'ret': None})
+                methods.append((child.value, sig.get('params', []), sig.get('ret')))
+        self.traits[name] = {'methods': methods}
+        return ASTNode('TRAIT', value=name, children=body)
+
+    def _parse_impl_def(self) -> ASTNode:
+        """impl TRAIT for CLASS:  def m(...): ..."""
+        self.pos += 1  # IMPL
+        trait = self.tokens[self.pos].value
+        self.pos += 1
+        if self.tokens[self.pos].type == 'FOR':
+            self.pos += 1
+        cls = self.tokens[self.pos].value
+        self.pos += 1
+        self._skip_to_colon()
+        body = self._parse_block()
+        methods = []
+        for child in body:
+            if child.type == 'FUNCTION':
+                sig = self.signatures.get(child.value, {'params': [], 'ret': None})
+                methods.append((child.value, sig.get('params', []), sig.get('ret')))
+        self.impls[(trait, cls)] = methods
+        return ASTNode('IMPL', value=f'{trait} for {cls}', children=body)
+
+    def _parse_unsafe_block(self) -> ASTNode:
+        """unsafe: BODY — ownership/type checks are skipped inside."""
+        self.pos += 1  # UNSAFE
+        self._skip_to_colon()
+        self.unsafe_depth += 1
+        try:
+            body = self._parse_block()
+        finally:
+            self.unsafe_depth -= 1
+        return ASTNode('UNSAFE', children=body)
+
+    def _capture_return_type(self) -> str:
+        """Capture `-> Type` annotation after a parameter list."""
+        if self.pos < len(self.tokens) and self.tokens[self.pos].value == '->':
+            self.pos += 1
+            parts = []
+            while self.pos < len(self.tokens) and self.tokens[self.pos].type not in ('COLON', 'NEWLINE'):
+                parts.append(str(self.tokens[self.pos].value))
+                self.pos += 1
+            return ''.join(parts)
+        return None
+
+    def _parse_type_annotation(self) -> str:
+        """Parse a type expression: `Int`, `List[Int]`, `Dict[Str, Int]`."""
+        parts = []
+        while self.pos < len(self.tokens):
+            tok = self.tokens[self.pos]
+            t = tok.type
+            if t == 'LBRACKET':
+                parts.append('[')
+                self.pos += 1
+            elif t == 'RBRACKET':
+                parts.append(']')
+                self.pos += 1
+            elif t == 'COMMA':
+                parts.append(',')
+                self.pos += 1
+            elif t in ('IDENTIFIER', 'BUILTIN'):
+                parts.append(str(tok.value))
+                self.pos += 1
+            else:
+                break
+        return ''.join(parts) or None
 
     def _parse_if_stmt(self) -> ASTNode:
         self.pos += 1  # IF
@@ -351,8 +572,10 @@ class Parser:
             self.pos += 1  # stray tokens (e.g. `-> Int` annotations)
 
     # ------------------------------------------------------------- parameters
-    def _parse_params(self) -> str:
-        """Parse a parenthesised parameter/bases list and render it cleanly."""
+    def _parse_params(self) -> Tuple[str, list]:
+        """Parse a parenthesised parameter/bases list and render it cleanly.
+        Returns (clean_params, [(name, type_or_None)]) — the second element
+        feeds the hard-mode type checker."""
         self.pos += 1  # LPAREN
         raw_parts = []
         depth = 1
@@ -374,12 +597,35 @@ class Parser:
             self.pos += 1
         raw = ' '.join(raw_parts)
         raw = re.sub(r'\s*,\s*', ', ', raw.strip())
+
+        # Capture `name: Type` annotations for the type checker BEFORE the
+        # annotations are stripped from the emitted parameter list. Star
+        # params keep their `*` marker so the checker can exempt them from
+        # the mandatory-annotation rule.
+        param_types = []
+        for part in raw.split(','):
+            part = part.strip()
+            if not part:
+                continue
+            if part.startswith('**') or part.startswith('*'):
+                # normalize `* args` / `** kwargs` spacing for the checker
+                param_types.append((part.replace('** ', '**').replace('* ', '*'), None))
+                continue
+            if ':' in part:
+                name, _, ann = part.partition(':')
+                # strip a default value: `b: Int = 10` -> annotation `Int`
+                ann = ann.split('=')[0].strip()
+                param_types.append((name.strip(), ann))
+            else:
+                base = part.split('=')[0].strip()
+                param_types.append((base, None))
+
         raw = _PARAM_ANNOTATION.sub('', raw)
         raw = re.sub(r'\s*=\s*', '=', raw)
         raw = re.sub(r'\*\*\s*', '**', raw)
         raw = re.sub(r'\*\s*', '*', raw)
         raw = raw.strip().strip(',')
-        return raw
+        return raw, param_types
 
     # ------------------------------------------------------------ expressions
     def _parse_expression(self, min_prec: int = 0) -> ASTNode:
@@ -409,6 +655,9 @@ class Parser:
 
     def _parse_unary(self) -> ASTNode:
         tok = self.tokens[self.pos]
+        if tok.type == '@':  # NV2.0 pointer dereference: @p
+            self.pos += 1
+            return ASTNode('DEREF', children=[self._parse_unary()])
         if tok.type == 'NOT':
             self.pos += 1
             operand = self._parse_unary()
@@ -501,7 +750,9 @@ class Parser:
             self._expect('RPAREN')
             return ASTNode('TUPLE', value=f'({", ".join(items)})')
         self._expect('RPAREN')
-        return ASTNode('EXPRESSION', value=f'({self._node_to_str(first)})')
+        # allow postfix chaining on parenthesised expressions: (a + b).foo()
+        return self._parse_postfix(
+            ASTNode('EXPRESSION', value=f'({self._node_to_str(first)})'))
 
     def _parse_list_literal(self) -> ASTNode:
         self.pos += 1  # LBRACKET
@@ -715,6 +966,8 @@ class Parser:
             return node.value
         if t == 'EXPRESSION':
             return str(node.value)
+        if t == 'DEREF':
+            return f'@{self._node_to_str(node.children[0]) if node.children else ""}'
         if t == 'CALL':
             args = ', '.join(self._node_to_str(c) for c in node.children)
             return f'{node.value}({args})'

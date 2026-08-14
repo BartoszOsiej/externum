@@ -1,4 +1,9 @@
-"""Comprehensive conformance tests for Externum v3.
+"""Comprehensive conformance tests for Externum v3 (strict language).
+
+Externum is strict by design: bindings must be declared with a type,
+parameters carry annotations, reassignment requires `mut`. The lexer/parser/
+compiler tests below exercise the transpiler directly (no type checking);
+the runtime tests run real programs through the strict pipeline.
 
 Run with:  python3 -m unittest discover -s tests -v
 """
@@ -270,11 +275,11 @@ class TestRuntime(unittest.TestCase):
         self.assertIn("Hello from Externum!", out)
 
     def test_binary_arithmetic(self):
-        out = run_capture("x = 0b1010\ny = 42\nprint(x + y)\n")
+        out = run_capture("x: Int = 0b1010\ny: Int = 42\nprint(x + y)\n")
         self.assertIn("52", out)
 
     def test_while_loop(self):
-        out = run_capture("i = 0\nwhile i < 3:\n    print(i)\n    i += 1\n")
+        out = run_capture("mut i: Int = 0\nwhile i < 3:\n    print(i)\n    i += 1\n")
         self.assertEqual(out.split(), ["0", "1", "2"])
 
     def test_for_loop(self):
@@ -282,99 +287,99 @@ class TestRuntime(unittest.TestCase):
         self.assertEqual(out.split(), ["0", "1", "2"])
 
     def test_if_elif_else(self):
-        out = run_capture('x = 10\nif x > 5:\n    print("large")\nelif x > 0:\n    print("small")\nelse:\n    print("none")\n')
+        out = run_capture('x: Int = 10\nif x > 5:\n    print("large")\nelif x > 0:\n    print("small")\nelse:\n    print("none")\n')
         self.assertIn("large", out)
 
     def test_recursion(self):
-        out = run_capture("def fact(n):\n    if n <= 1:\n        return 1\n    return n * fact(n - 1)\nprint(fact(5))\n")
+        out = run_capture("def fact(n: Int) -> Int:\n    if n <= 1:\n        return 1\n    return n * fact(n - 1)\nprint(fact(5))\n")
         self.assertIn("120", out)
 
     def test_fstring(self):
-        out = run_capture('x = 42\nprint(f"value: {x}")\n')
+        out = run_capture('x: Int = 42\nprint(f"value: {x}")\n')
         self.assertIn("value: 42", out)
 
     def test_lists(self):
-        out = run_capture("a = [1, 2, 3]\na.append(4)\nprint(a[0])\nprint(a[-1])\nprint(len(a))\n")
+        out = run_capture("a: List[Int] = [1, 2, 3]\na.append(4)\nprint(a[0])\nprint(a[-1])\nprint(len(a))\n")
         self.assertEqual(out.split(), ["1", "4", "4"])
 
     def test_slicing(self):
-        out = run_capture("a = [0, 1, 2, 3, 4]\nprint(a[1:3])\nprint(a[::-1])\nprint(a[::2])\n")
+        out = run_capture("a: List[Int] = [0, 1, 2, 3, 4]\nprint(a[1:3])\nprint(a[::-1])\nprint(a[::2])\n")
         self.assertIn("[1, 2]", out)
         self.assertIn("[4, 3, 2, 1, 0]", out)
         self.assertIn("[0, 2, 4]", out)
 
     def test_dicts(self):
-        out = run_capture('d = {"a": 1, "b": 2}\nd["c"] = 3\nprint(d["a"] + d["c"])\nprint(len(d))\n')
+        out = run_capture('d: Dict[Str, Int] = {"a": 1, "b": 2}\nd["c"] = 3\nprint(d["a"] + d["c"])\nprint(len(d))\n')
         self.assertEqual(out.split(), ["4", "3"])
 
     def test_strings(self):
-        out = run_capture('s = "Externum"\nprint(s.upper())\nprint(s[0])\nprint(s[::-1])\n')
+        out = run_capture('s: Str = "Externum"\nprint(s.upper())\nprint(s[0])\nprint(s[::-1])\n')
         self.assertIn("EXTERNUM", out)
         self.assertIn("E", out)
         self.assertIn("munretxE", out)
 
     def test_class_basics(self):
         out = run_capture(
-            'class Animal:\n    def __init__(self, name):\n        self.name = name\n'
-            '    def speak(self):\n        print("... from " + self.name)\n'
-            'a = Animal("Rex")\na.speak()\n'
+            'class Animal:\n    def __init__(self, name: Str):\n        self.name = name\n'
+            '    def speak(self) -> Str:\n        return "... from " + self.name\n'
+            'a: Any = Animal("Rex")\nprint(a.speak())\n'
         )
         self.assertIn("... from Rex", out)
 
     def test_class_inheritance(self):
         out = run_capture(
-            'class Animal:\n    def __init__(self, name):\n        self.name = name\n'
-            '    def speak(self):\n        print("generic")\n'
-            'class Dog(Animal):\n    def speak(self):\n        print("woof " + self.name)\n'
-            'd = Dog("Burek")\nd.speak()\n'
+            'class Animal:\n    def __init__(self, name: Str):\n        self.name = name\n'
+            '    def speak(self) -> Str:\n        return "generic"\n'
+            'class Dog(Animal):\n    def speak(self) -> Str:\n        return "woof " + self.name\n'
+            'd: Any = Dog("Burek")\nprint(d.speak())\n'
         )
         self.assertIn("woof Burek", out)
 
     def test_exceptions(self):
         out = run_capture(
-            "try:\n    x = 1 / 0\nexcept ZeroDivisionError as e:\n    print(\"caught\")\n"
+            "try:\n    x: Int = 1 / 0\nexcept ZeroDivisionError as e:\n    print(\"caught\")\n"
         )
         self.assertIn("caught", out)
 
     def test_raise(self):
         out = run_capture(
-            'def f():\n    raise ValueError("boom")\n'
+            'def f() -> Void:\n    raise ValueError("boom")\n'
             "try:\n    f()\nexcept ValueError as e:\n    print(e)\n"
         )
         self.assertIn("boom", out)
 
     def test_try_else_finally(self):
         out = run_capture(
-            "try:\n    x = 1\nexcept:\n    print(\"no\")\nelse:\n    print(\"yes\")\nfinally:\n    print(\"fin\")\n"
+            "try:\n    x: Int = 1\nexcept:\n    print(\"no\")\nelse:\n    print(\"yes\")\nfinally:\n    print(\"fin\")\n"
         )
         self.assertEqual(out.split(), ["yes", "fin"])
 
     def test_lambda(self):
-        out = run_capture("f = lambda x, y: x * y\nprint(f(3, 4))\n")
+        out = run_capture("f: Any = lambda x, y: x * y\nprint(f(3, 4))\n")
         self.assertIn("12", out)
 
     def test_ternary(self):
-        out = run_capture("x = 10\nprint(\"big\" if x > 5 else \"small\")\n")
+        out = run_capture('x: Int = 10\nprint("big" if x > 5 else "small")\n')
         self.assertIn("big", out)
 
     def test_comprehension(self):
-        out = run_capture("squares = [i * i for i in range(5)]\nprint(squares)\n")
+        out = run_capture("squares: List[Int] = [i * i for i in range(5)]\nprint(squares)\n")
         self.assertIn("[0, 1, 4, 9, 16]", out)
 
     def test_comprehension_filter(self):
-        out = run_capture("evens = [i for i in range(10) if i % 2 == 0]\nprint(evens)\n")
+        out = run_capture("evens: List[Int] = [i for i in range(10) if i % 2 == 0]\nprint(evens)\n")
         self.assertIn("[0, 2, 4, 6, 8]", out)
 
     def test_default_args(self):
-        out = run_capture("def f(a, b=10):\n    return a + b\nprint(f(1))\nprint(f(1, 2))\n")
+        out = run_capture("def f(a: Int, b: Int = 10) -> Int:\n    return a + b\nprint(f(1))\nprint(f(1, 2))\n")
         self.assertEqual(out.split(), ["11", "3"])
 
     def test_kwargs_call(self):
-        out = run_capture("def f(a, b):\n    return a - b\nprint(f(b=1, a=5))\n")
+        out = run_capture("def f(a: Int, b: Int) -> Int:\n    return a - b\nprint(f(b=1, a=5))\n")
         self.assertIn("4", out)
 
     def test_star_args(self):
-        out = run_capture("def f(*args):\n    return len(args)\nprint(f(1, 2, 3))\n")
+        out = run_capture("def f(*args) -> Int:\n    return len(args)\nprint(f(1, 2, 3))\n")
         self.assertIn("3", out)
 
     def test_generators(self):
@@ -398,19 +403,19 @@ class TestRuntime(unittest.TestCase):
 
     def test_import_lib_collections(self):
         out = run_capture(
-            "import structs\ns = structs.Stack()\ns.push(1)\ns.push(2)\nprint(s.pop())\nprint(s.size())\n"
+            "import structs\ns: Any = structs.Stack()\ns.push(1)\ns.push(2)\nprint(s.pop())\nprint(s.size())\n"
         )
         self.assertEqual(out.split(), ["2", "1"])
 
     def test_assert_passes(self):
-        out = run_capture("x = 5\nassert x > 0\nprint(\"ok\")\n")
+        out = run_capture("x: Int = 5\nassert x > 0\nprint(\"ok\")\n")
         self.assertIn("ok", out)
 
     def test_assert_fails(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             try:
-                Runtime().run("x = 5\nassert x < 0\n")
+                Runtime().run("x: Int = 5\nassert x < 0\n")
             except AssertionError:
                 out.write("asserted")
         self.assertIn("asserted", out.getvalue())
@@ -418,7 +423,7 @@ class TestRuntime(unittest.TestCase):
     def test_with_statement(self):
         out = run_capture(
             'with open("/tmp/ext_test_file.txt", "w") as f:\n    f.write("hi")\n'
-            'f2 = open("/tmp/ext_test_file.txt", "r")\nprint(f2.read())\nf2.close()\n'
+            'f2: Any = open("/tmp/ext_test_file.txt", "r")\nprint(f2.read())\nf2.close()\n'
         )
         self.assertIn("hi", out)
 
@@ -427,13 +432,13 @@ class TestRuntime(unittest.TestCase):
         self.assertEqual(out.split(), ["8", "16", "7", "-1"])
 
     def test_unary_minus_runtime(self):
-        out = run_capture("x = 5\nprint(-x)\nprint(2 ** 3)\n")
+        out = run_capture("x: Int = 5\nprint(-x)\nprint(2 ** 3)\n")
         self.assertEqual(out.split(), ["-5", "8"])
 
     def test_nested_structures(self):
         out = run_capture(
-            "matrix = [[1, 2], [3, 4]]\nprint(matrix[1][0])\n"
-            'people = [{"name": "Ala", "age": 3}, {"name": "Ola", "age": 5}]\nprint(people[1]["name"])\n'
+            "matrix: List[List[Int]] = [[1, 2], [3, 4]]\nprint(matrix[1][0])\n"
+            'people: List[Dict[Str, Any]] = [{"name": "Ala", "age": 3}, {"name": "Ola", "age": 5}]\nprint(people[1]["name"])\n'
         )
         self.assertEqual(out.split(), ["3", "Ola"])
 
@@ -446,7 +451,7 @@ class TestRuntime(unittest.TestCase):
         self.assertIn("echo hi", result["bash"])
 
     def test_increments(self):
-        out = run_capture("x = 10\nx += 5\nx *= 2\nprint(x)\n")
+        out = run_capture("mut x: Int = 10\nx += 5\nx *= 2\nprint(x)\n")
         self.assertIn("30", out)
 
     def test_boolean_logic(self):
@@ -454,7 +459,7 @@ class TestRuntime(unittest.TestCase):
         self.assertEqual(out.split(), ["False", "True", "False"])
 
     def test_comparison_chain(self):
-        out = run_capture("x = 5\nprint(0 < x < 10)\nprint(x == 5)\nprint(x != 3)\n")
+        out = run_capture("x: Int = 5\nprint(0 < x < 10)\nprint(x == 5)\nprint(x != 3)\n")
         self.assertEqual(out.split(), ["True", "True", "True"])
 
     def test_math_ops(self):
@@ -462,12 +467,12 @@ class TestRuntime(unittest.TestCase):
         self.assertEqual(out.split(), ["3", "1", "256", "3"])
 
     def test_string_methods(self):
-        out = run_capture('s = "  Hello World  "\nprint(s.strip().lower())\nprint("a,b,c".split(","))\n')
+        out = run_capture('s: Str = "  Hello World  "\nprint(s.strip().lower())\nprint("a,b,c".split(","))\n')
         self.assertIn("hello world", out)
         self.assertIn("['a', 'b', 'c']", out)
 
     def test_sorting(self):
-        out = run_capture("nums = [3, 1, 2]\nnums.sort()\nprint(nums)\nprint(sorted(nums, reverse=True))\n")
+        out = run_capture("nums: List[Int] = [3, 1, 2]\nnums.sort()\nprint(nums)\nprint(sorted(nums, reverse=True))\n")
         self.assertIn("[1, 2, 3]", out)
         self.assertIn("[3, 2, 1]", out)
 
@@ -478,16 +483,16 @@ class TestRuntime(unittest.TestCase):
 
     def test_global_stmt(self):
         out = run_capture(
-            "counter = 0\n"
-            "def bump():\n    global counter\n    counter = counter + 1\n"
+            "counter: Int = 0\n"
+            "def bump() -> Void:\n    global counter\n    counter = counter + 1\n"
             "bump()\nbump()\nprint(counter)\n"
         )
         self.assertIn("2", out)
 
     def test_closures(self):
         out = run_capture(
-            "def make_adder(n):\n    def adder(x):\n        return x + n\n    return adder\n"
-            "add5 = make_adder(5)\nprint(add5(10))\n"
+            "def make_adder(n: Int):\n    def adder(x: Int) -> Int:\n        return x + n\n    return adder\n"
+            "add5: Any = make_adder(5)\nprint(add5(10))\n"
         )
         self.assertIn("15", out)
 
@@ -517,7 +522,7 @@ class TestRuntime(unittest.TestCase):
         self.assertEqual(out.split(), ["255", "18"])
 
     def test_triple_string_runtime(self):
-        out = run_capture('s = """line1\nline2"""\nprint(len(s))\n')
+        out = run_capture('s: Str = """line1\nline2"""\nprint(len(s))\n')
         self.assertIn("11", out)
 
     def test_deep_expression(self):
@@ -526,7 +531,7 @@ class TestRuntime(unittest.TestCase):
 
     def test_class_counter_usage(self):
         out = run_capture(
-            "import structs\nc = structs.Counter([1, 2, 2, 3, 3, 3])\n"
+            "import structs\nc: Any = structs.Counter([1, 2, 2, 3, 3, 3])\n"
             "print(c.get(3))\nprint(c.total())\nprint(c.most_common()[0])\n"
         )
         self.assertIn("3", out)
@@ -539,19 +544,19 @@ class TestRuntime(unittest.TestCase):
 
     def test_star_args_sum(self):
         out = run_capture(
-            "def total(*nums):\n    s = 0\n    for n in nums:\n        s = s + n\n    return s\nprint(total(1, 2, 3, 4))\n"
+            "def total(*nums) -> Int:\n    mut s: Int = 0\n    for n in nums:\n        s = s + n\n    return s\nprint(total(1, 2, 3, 4))\n"
         )
         self.assertIn("10", out)
 
     def test_nested_functions(self):
         out = run_capture(
-            "def outer():\n    def inner():\n        return 42\n    return inner()\nprint(outer())\n"
+            "def outer() -> Int:\n    def inner() -> Int:\n        return 42\n    return inner()\nprint(outer())\n"
         )
         self.assertIn("42", out)
 
     def test_while_break_continue(self):
         out = run_capture(
-            "i = 0\nwhile True:\n    i = i + 1\n    if i == 2:\n        continue\n    if i > 4:\n        break\n    print(i)\n"
+            "mut i: Int = 0\nwhile True:\n    i = i + 1\n    if i == 2:\n        continue\n    if i > 4:\n        break\n    print(i)\n"
         )
         self.assertEqual(out.split(), ["1", "3", "4"])
 

@@ -1,0 +1,93 @@
+# nv2_launcher.ext — NV-2.0 DRM launcher. Every protection lives in
+# Externum (.ext) and the compiled artifact is fully self-contained — it
+# does not depend on Externum's stdlib at runtime.
+#
+# The build script (tools/build_nv2.ext) patches the two PATCH_ME_*
+# constants per release and then compiles this file with `--protect`, so
+# the shipped artifact is self-checking AND watermarked by Externum DRM.
+#
+# Run:  python dist/nv2_launcher.ebin --key <license-key> [game args]
+
+EXPECTED_BINARY_SHA: Str = '8a71b01f160fde2b895fa0286eb7da10b5704166d5cb531be9bcc147072170a2'
+EXPECTED_LICENSE_SHA: Str = '24d92b5fa10f85bd1182ddd8554aeb6443ea1b2e68bc3e1ed0f3fa1c46cadee8'
+APP_ID: Str = 'nv2-engine'
+AUTHOR: Str = 'NV-2.0'
+# Patched by build_nv2.ext: './nv2_engine' on linux, 'nv2_engine.exe' on windows
+GAME_BINARY: Str = './nv2_engine'
+WATERMARK: Str = 'Externum::DRM::nv2-engine::NV-2.0'
+
+# ------------------------------------------------------------- primitives
+
+def file_exists(path: Str) -> Bool:
+    import os
+    return os.path.isfile(path)
+
+def sha256_file(path: Str) -> Str:
+    import hashlib
+    fh: Any = open(path, 'rb')
+    blob: Any = fh.read()
+    fh.close()
+    return hashlib.sha256(blob).hexdigest()
+
+def sha256_str(s: Str) -> Str:
+    import hashlib
+    return hashlib.sha256(s.encode()).hexdigest()
+
+# --------------------------------------------------------------- helpers
+
+def parse_key(args: List[Str]) -> Str:
+    # --key <license> may appear anywhere; unknown args are game args
+    mut i: Int = 0
+    while i < len(args):
+        if args[i] == '--key' and i + 1 < len(args):
+            return args[i + 1]
+        i = i + 1
+    return ''
+
+def collect_game_args(args: List[Str]) -> List[Str]:
+    result: List[Any] = []
+    mut i: Int = 0
+    while i < len(args):
+        if args[i] == '--key':
+            i = i + 2
+        else:
+            result.append(args[i])
+            i = i + 1
+    return result
+
+def run_game(args: List[Str]) -> Int:
+    import subprocess
+    proc: Any = subprocess.run([GAME_BINARY] + args)
+    return proc.returncode
+
+# ------------------------------------------------------------------ main
+
+def main() -> Int:
+    import sys
+    args: List[Str] = list(sys.argv[1:])
+
+    # 1) license gate — the key must match the embedded digest. The DRM
+    #    secret itself is never shipped, so a stolen copy of the game
+    #    still cannot mint valid keys.
+    key: Str = parse_key(args)
+    if key == '':
+        print('NV-2.0: license key required — pass --key <key>')
+        sys.exit(2)
+    if sha256_str(key) != EXPECTED_LICENSE_SHA:
+        print('NV-2.0: invalid license key')
+        sys.exit(3)
+
+    # 2) binary integrity — the game executable must match the build sha.
+    #    Patching the launcher is pointless: it is itself DRM-protected.
+    if not file_exists(GAME_BINARY):
+        print('NV-2.0: game binary missing — reinstall or update')
+        sys.exit(4)
+    if sha256_file(GAME_BINARY) != EXPECTED_BINARY_SHA:
+        print('NV-2.0: game binary modified — reinstall or update')
+        sys.exit(4)
+
+    # 3) launch the verified game
+    print(WATERMARK)
+    sys.exit(run_game(collect_game_args(args)))
+
+main()

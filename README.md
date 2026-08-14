@@ -76,12 +76,6 @@ nums = [f for f in fibonacci(10) if f % 2 == 0]
 externum run examples/pokedex.ext
 ```
 
-## Tests
-
-```bash
-python3 -m unittest discover -s tests -v   # 118 tests
-```
-
 ## Project structure
 
 ```
@@ -89,12 +83,65 @@ externum/
 ├── lexer.py          # Tokenization (bracket-aware, bash, f-strings)
 ├── parser.py         # Full grammar → AST
 ├── compiler.py       # Codegen → Python / Bash / binary
-├── runtime/          # Runtime: exec, import .ext, REPL
-└── __main__.py       # CLI (run / repl / compile)
-lib/                  # Standard library (.ext)
-examples/             # hello, calc, pokedex
-tests/                # 118 unit tests
+├── typesys.py        # NV2.0 type checker (hard mode: static types, ownership)
+├── hardmode.py       # NV2.0 macros + hard-mode pipeline
+├── drm.py            # NV2.0 DRM: license keys, watermark, tamper-detection, obfuscation
+├── runtime/          # Runtime: exec, import .ext, REPL (+ rtlib.py memory/concurrency helpers)
+└── __main__.py       # CLI (run / repl / compile / keygen)
+lib/                  # Standard library (.ext) — incl. drm.ext
+lib/drm.ext           # NV2.0 DRM stdlib: sign / verify / watermark in Externum
+examples/             # hello, calc, pokedex, hardcore.ext
+tests/                # 167 unit tests
 WIKI.md               # Language specification
+```
+
+## NV2.0 — Hard Mode (`--hard`) — giga trudny
+
+Run any program with `externum run program.ext --hard` (or `compile … --hard`)
+to enable the hardcore ruleset. Existing programs that violate it fail loudly:
+
+- **Mandatory declarations** — every variable needs `x: Type` before use;
+  using an undeclared name is a compile error.
+- **Static typing** — assignment/return mismatches are rejected at compile
+  time (`Int` widens to `Float`; everything else must match).
+- **Manual memory** — `alloc(Int)`, `free(p)`, `@p` dereference; double-free
+  and use-after-free are **compile errors** (ownership is enforced).
+- **`match`/`case`** — pattern matching with literals, binds, guards, and
+  list/tuple destructuring.
+- **Traits** — `trait X:` + `impl X for Y:`; implementations missing
+  methods or with wrong return types are rejected.
+- **`unsafe:` blocks** — the escape hatch: checks are skipped inside.
+- **Macros** — `macro NAME(a, b) { … }` compile-time expansion.
+- **Concurrency** — `spawn(f(...))`, `chan()`, `send(ch, v)`, `recv(ch)`.
+- **Esoteric operators** — `≠`, `≈`, `←` work like `!=`, `==`, `=`.
+
+```bash
+externum run examples/hardcore.ext --hard
+```
+
+## NV2.0 — DRM (`--protect`) — obfuskacja, watermark, licencja
+
+Every protected build carries the full defense-in-depth stack:
+
+1. **License keys** — HMAC-SHA256 signed; `externum keygen --app-id X
+   --secret S` issues keys, the artifact verifies them (env
+   `EXTERNUM_LICENSE`), never embedding the secret.
+2. **Watermark** — author/app/build/source-hash header in every file.
+3. **Tamper detection** — source SHA-256 + artifact self-hash embedded;
+   modified copies are detected.
+4. **Obfuscation** — string literals encoded through a runtime helper.
+
+```bash
+externum compile app.ext --protect --app-id game --author buffy --secret s3cret
+EXTERNUM_LICENSE=<key> externum run app.ext --protect --app-id game --author buffy --secret s3cret
+```
+
+Standard-library `drm.ext` provides `sign`/`verify`/`watermark` in-language.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v   # 167 tests
 ```
 
 ## Roadmap

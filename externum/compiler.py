@@ -62,14 +62,136 @@ class Compiler:
     def _compile_AS_VAR(self, node: ASTNode):
         pass
 
+    def _compile_DECLARE(self, node: ASTNode):
+        # NV2.0: `x: Int` is a compile-time declaration — no runtime code.
+        pass
+
+    def _compile_UNSAFE(self, node: ASTNode):
+        # NV2.0: `unsafe:` body compiles as-is (checks are skipped).
+        for child in node.children:
+            self._compile_node(child)
+
+    def _compile_TRAIT(self, node: ASTNode):
+        name = node.value
+        self.output['python'].append(f'{self._i()}class {name}:')
+        self.indent += 1
+        self.output['python'].append(f'{self._i()}def __init__(self):')
+        self.indent += 1
+        self.output['python'].append(f'{self._i()}raise NotImplementedError("trait cannot be instantiated")')
+        self.indent -= 1
+        for child in node.children:
+            if child.type == 'FUNCTION':
+                params = ''
+                if child.children and child.children[0].type == 'PARAMS':
+                    params = child.children[0].value
+                self.output['python'].append(f'{self._i()}def {child.value}({params}):')
+                self.indent += 1
+                self.output['python'].append(f'{self._i()}raise NotImplementedError("trait method {child.value}")')
+                self.indent -= 1
+        self.indent -= 1
+        self.output['python'].append(f'{self._i()}_ext_traits["{name}"] = {name}')
+
+    def _compile_IMPL(self, node: ASTNode):
+        value = node.value  # "Trait for Class"
+        trait, _, cls = value.partition(' for ')
+        for child in node.children:
+            if child.type == 'FUNCTION':
+                self._compile_node(child)
+                self.output['python'].append(f'{self._i()}{cls}.{child.value} = {child.value}')
+        self.output['python'].append(f'{self._i()}_ext_impls[("{trait}", "{cls}")] = True')
+
+    def _compile_MATCH(self, node: ASTNode):
+        subject = self._value_to_str(node.children[0]) if node.children else 'None'
+        tmp = '_ext_m_subject'
+        done = '_ext_m_done'
+        self.output['python'].append(f'{self._i()}{tmp} = {subject}')
+        self.output['python'].append(f'{self._i()}{done} = False')
+        cases = [c for c in node.children[1:] if c.type == 'CASE']
+        for case in cases:
+            pattern = case.children[0].value if case.children else '_'
+            guard = None
+            body = []
+            for child in case.children[1:]:
+                if child.type == 'GUARD':
+                    guard = child.children[0] if child.children else None
+                else:
+                    body.append(child)
+            cond, binds = self._pattern_guard(pattern, tmp)
+            self.output['python'].append(f'{self._i()}if not {done} and ({cond}):')
+            self.indent += 1
+            for bind, expr in binds:
+                # bind before the guard so guards can reference the binding
+                self.output['python'].append(f'{self._i()}{bind} = {expr}')
+            if guard is not None:
+                self.output['python'].append(f'{self._i()}if ({self._value_to_str(guard)}):')
+                self.indent += 1
+                self.output['python'].append(f'{self._i()}{done} = True')
+                for child in body:
+                    self._compile_node(child)
+                self.indent -= 1
+            else:
+                self.output['python'].append(f'{self._i()}{done} = True')
+                for child in body:
+                    self._compile_node(child)
+            self.indent -= 1
+        self.output['python'].append(f'{self._i()}if not {done}:')
+        self.indent += 1
+        self.output['python'].append(f'{self._i()}raise _ext_match_error({tmp})')
+        self.indent -= 1
+
+    def _compile_CASE(self, node: ASTNode):
+        # Handled inline by _compile_MATCH.
+        pass
+
+    def _pattern_guard(self, pattern: str, tmp: str):
+        """Compile a case pattern into (condition, [(bind, source)])."""
+        pattern = pattern.strip()
+        if pattern == '_':
+            return 'True', []
+        if pattern.startswith('[') and pattern.endswith(']'):
+            inner = pattern[1:-1]
+            items = [p.strip() for p in inner.split(',')] if inner.strip() else []
+            cond = f'type({tmp}) is list and len({tmp}) == {len(items)}'
+            binds = []
+            for i, item in enumerate(items):
+                c, b = self._pattern_guard(item, f'{tmp}[{i}]')
+                cond += f' and ({c})'
+                binds.extend(b)
+            return cond, binds
+        if pattern.startswith('(') and pattern.endswith(')'):
+            inner = pattern[1:-1]
+            items = [p.strip() for p in inner.split(',')] if inner.strip() else []
+            cond = f'type({tmp}) is tuple and len({tmp}) == {len(items)}'
+            binds = []
+            for i, item in enumerate(items):
+                c, b = self._pattern_guard(item, f'{tmp}[{i}]')
+                cond += f' and ({c})'
+                binds.extend(b)
+            return cond, binds
+        if pattern in ('True', 'False'):
+            return f'{tmp} == {pattern}', []
+        if pattern == 'None':
+            return f'{tmp} is None', []
+        if pattern.startswith(('"', "'", 'f"', "f'")) or pattern.lstrip('-').replace('.', '', 1).isdigit():
+            return f'{tmp} == {pattern}', []
+        if re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', pattern):
+            return 'True', [(pattern, tmp)]
+        return f'{tmp} == ({pattern})', []
+
     # -------------------------------------------------------------- statements
     def _compile_ASSIGN(self, node: ASTNode):
         if node.value:
             target = node.value
             val = self._value_to_str(node.children[0]) if node.children else 'None'
         else:
-            target = self._value_to_str(node.children[0]) if node.children else 'None'
+            tgt = node.children[0] if node.children else None
             val = self._value_to_str(node.children[1]) if len(node.children) > 1 else 'None'
+            if tgt is not None and tgt.type == 'DEREF':
+                # NV2.0: `@p = v` writes through a pointer.
+                ptr = self._value_to_str(tgt.children[0]) if tgt.children else 'None'
+                self.output['python'].append(f'{self._i()}_ext_store({ptr}, {val})')
+                return
+            target = self._value_to_str(tgt) if tgt else 'None'
         self.output['python'].append(f'{self._i()}{target} = {val}')
 
     def _compile_AUG_ASSIGN(self, node: ASTNode):
@@ -292,8 +414,7 @@ class Compiler:
                 self.output['binary'].append(m)
 
     def _compile_CALL(self, node: ASTNode):
-        args = ', '.join(self._value_to_str(c) for c in node.children)
-        self.output['python'].append(f'{self._i()}{node.value}({args})')
+        self.output['python'].append(f'{self._i()}{self._call_to_str(node)}')
 
     # ------------------------------------------------------------- bash targets
     def _compile_BASH_BLOCK(self, node: ASTNode):
@@ -309,6 +430,44 @@ class Compiler:
         self.output['python'].append(f'{self._i()}subprocess.run("{escaped}", shell=True)')
 
     # ---------------------------------------------------------------- helpers
+    def _call_to_str(self, node: ASTNode) -> str:
+        """Render a call, mapping NV2.0 builtins to runtime helpers."""
+        fn = node.value
+        args = ', '.join(self._value_to_str(c) for c in node.children)
+        if fn == 'alloc':
+            type_str = 'Any'
+            extra = ''
+            if node.children:
+                first = node.children[0]
+                type_str = first.value if first.type == 'IDENTIFIER' else self._value_to_str(first)
+                if len(node.children) > 1:
+                    extra = ', ' + ', '.join(self._value_to_str(c) for c in node.children[1:])
+            return f"_ext_alloc('{type_str}'{extra})"
+        if fn == 'free':
+            return f'_ext_free({args})'
+        if fn == 'addr':
+            return f'_ext_addr({args})'
+        if fn == 'sizeof':
+            type_str = 'Any'
+            if node.children:
+                first = node.children[0]
+                type_str = first.value if first.type == 'IDENTIFIER' else self._value_to_str(first)
+            return f"_ext_sizeof('{type_str}')"
+        if fn == 'copy':
+            # `copy(x)` restores a moved value. Python values are reference-
+            # based, so a plain re-read is the correct semantic.
+            return args
+        if fn == 'chan':
+            return f'_ext_chan()'
+        if fn == 'send':
+            return f'_ext_send({args})'
+        if fn == 'recv':
+            return f'_ext_recv({args})'
+        if fn == 'spawn':
+            inner = self._value_to_str(node.children[0]) if node.children else 'None'
+            return f'_ext_spawn(lambda: {inner})'
+        return f'{fn}({args})'
+
     def _string_repr(self, value) -> str:
         """Emit a string literal. f-strings pass through as-is."""
         if isinstance(value, str):
@@ -339,8 +498,10 @@ class Compiler:
                  'UNKNOWN'):
             return str(node.value)
         if t == 'CALL':
-            args = ', '.join(self._value_to_str(c) for c in node.children)
-            return f'{node.value}({args})'
+            return self._call_to_str(node)
+        if t == 'DEREF':
+            inner = self._value_to_str(node.children[0]) if node.children else 'None'
+            return f'_ext_load({inner})'
         if t == 'KWARG':
             return f'{node.value}={self._value_to_str(node.children[0]) if node.children else "None"}'
         if t == 'STAR':

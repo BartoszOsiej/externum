@@ -28,25 +28,36 @@ class Lexer:
         'return', 'yield', 'import', 'from', 'as', 'pass', 'break',
         'continue', 'try', 'except', 'finally', 'raise', 'with',
         'assert', 'del', 'global', 'nonlocal', 'lambda',
-        'True', 'False', 'None', 'self', 'and', 'or', 'not', 'in', 'is'
+        'True', 'False', 'None', 'self', 'and', 'or', 'not', 'in', 'is',
+        # NV2.0 language keywords
+        'match', 'case', 'trait', 'impl', 'unsafe', 'macro', 'mut',
     }
 
     BUILTINS = {'print', 'input', 'len', 'str', 'int', 'float', 'bool',
                 'list', 'dict', 'tuple', 'set', 'range', 'open', 'type',
                 'sum', 'min', 'max', 'abs', 'round', 'enumerate', 'zip',
                 'sorted', 'reversed', 'chr', 'ord', 'hex', 'oct', 'bin',
-                'isinstance', 'repr', 'id', 'hash', 'format'}
+                'isinstance', 'repr', 'id', 'hash', 'format',
+                # NV2.0 builtins (manual memory + concurrency + explicit copy)
+                'alloc', 'free', 'addr', 'spawn', 'chan', 'send', 'recv', 'copy',
+                'Ptr', 'Int', 'Float', 'Str', 'Bool', 'Void', 'Any',
+                'List', 'Dict', 'Optional', 'sizeof',
+            }
 
     # Ordered: longest/most specific first so greedy matching works.
+    # NV2.0 esoteric operators: ≠ (not-eq), ≈ (eq), ← (assign).
     OPERATORS = ['**', '<<', '>>', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=',
                  '//', '&&', '||', '->', '+', '-', '*', '/', '%', '=', '<', '>',
-                 '~', '&', '|', '^', '(', ')', '[', ']', '{', '}', ',', ':', '.', ';', '@']
+                 '~', '&', '|', '^', '(', ')', '[', ']', '{', '}', ',', ':', '.', ';', '@',
+                 '≠', '≈', '←']
 
     NAME_MAP = {
         '(': 'LPAREN', ')': 'RPAREN', ',': 'COMMA', ':': 'COLON', ';': 'SEMICOLON',
         '.': 'DOT', '[': 'LBRACKET', ']': 'RBRACKET', '{': 'LBRACE', '}': 'RBRACE',
         '+': 'PLUS', '-': 'MINUS', '*': 'TIMES', '/': 'DIVIDE', '**': 'POWER', '%': 'MOD',
         '=': 'ASSIGN',
+        # NV2.0 hard-mode esoteric operators
+        '≠': 'NEQ', '≈': 'EQ', '←': 'ASSIGN',
     }
 
     def __init__(self, source: str):

@@ -1,19 +1,19 @@
-# lib/strings.ext — string helpers written in Externum
+# lib/strings.ext — string helpers written in Externum (strict language)
 # Usage:  import strings  →  strings.reverse("abc")
 
-def reverse(s):
-    result = ""
+def reverse(s: Str) -> Str:
+    mut result: Str = ""
     for ch in s:
         result = ch + result
     return result
 
 
-def is_palindrome(s):
+def is_palindrome(s: Str) -> Bool:
     return s == reverse(s)
 
 
-def slugify(s):
-    result = ""
+def slugify(s: Str) -> Str:
+    mut result: Str = ""
     for ch in s:
         if ch.isalnum():
             result = result + ch.lower()
@@ -24,9 +24,9 @@ def slugify(s):
     return result
 
 
-def word_count(text):
-    words = text.split()
-    counts = {}
+def word_count(text: Str) -> Dict[Str, Int]:
+    words: List[Str] = text.split()
+    counts: Dict[Str, Int] = {}
     for w in words:
         w = w.lower()
         if w in counts:
@@ -36,13 +36,13 @@ def word_count(text):
     return counts
 
 
-def capitalize(s):
+def capitalize(s: Str) -> Str:
     if len(s) == 0:
         return s
     return s[0].upper() + s[1:]
 
 
-def truncate(s, max_len, suffix="..."):
+def truncate(s: Str, max_len: Int, suffix: Str = "...") -> Str:
     if len(s) <= max_len:
         return s
     return s[:max_len - len(suffix)] + suffix

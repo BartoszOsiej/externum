@@ -1,33 +1,33 @@
-# lib/fs.ext — filesystem helpers written in Externum
+# lib/fs.ext — filesystem helpers written in Externum (strict language)
 # Usage:  import fs  →  fs.read_file("data.txt")
 
-def read_file(path):
-    f = open(path, "r")
-    content = f.read()
+def read_file(path: Str) -> Str:
+    f: Any = open(path, "r")
+    content: Str = f.read()
     f.close()
     return content
 
 
-def write_file(path, content):
-    f = open(path, "w")
+def write_file(path: Str, content: Str) -> Void:
+    f: Any = open(path, "w")
     f.write(content)
     f.close()
 
 
-def append_file(path, content):
-    f = open(path, "a")
+def append_file(path: Str, content: Str) -> Void:
+    f: Any = open(path, "a")
     f.write(content)
     f.close()
 
 
-def file_exists(path):
+def file_exists(path: Str) -> Bool:
     try:
-        f = open(path, "r")
+        f: Any = open(path, "r")
         f.close()
         return True
     except:
         return False
 
 
-def list_dir(path="."):
+def list_dir(path: Str = ".") -> List[Str]:
     return __import__("os").listdir(path)
