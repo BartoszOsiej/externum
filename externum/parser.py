@@ -10,7 +10,7 @@ slicing, member access, method calls, keyword/star args and comprehensions.
 """
 
 import re
-from typing import List
+from typing import List, Tuple
 from dataclasses import dataclass, field
 from .lexer import Token
 
