@@ -561,5 +561,72 @@ class TestRuntime(unittest.TestCase):
         self.assertEqual(out.split(), ["1", "3", "4"])
 
 
+class TestJsonxStdlib(unittest.TestCase):
+    """lib/jsonx.ext — JSON load/dump helpers in strict Externum."""
+
+    def test_dump_str_roundtrip(self):
+        out = run_capture(
+            'import jsonx\n'
+            "data: Dict[Str, Any] = {'name': 'NV-2.0', 'rating': 'PEGI 3'}\n"
+            's: Str = jsonx.dump_str(data, 2)\n'
+            'print(s)\n'
+            "back: Any = jsonx.load_str(s)\n"
+            "print(back['name'])\n"
+            "print(back['rating'])\n"
+        )
+        self.assertIn("NV-2.0", out)
+        self.assertIn("PEGI 3", out)
+
+    def test_dump_str_compact(self):
+        out = run_capture(
+            "import jsonx\n"
+            "data: Dict[Str, Int] = {'a': 1}\n"
+            "print(jsonx.dump_str(data))\n"
+        )
+        self.assertIn('{"a": 1}', out)
+
+    def test_load_dump_file_roundtrip(self):
+        out = run_capture(
+            "import jsonx\n"
+            "data: Dict[Str, Int] = {'x': 7, 'y': 9}\n"
+            'jsonx.dump("/tmp/ext_jsonx.json", data)\n'
+            "back: Any = jsonx.load('/tmp/ext_jsonx.json')\n"
+            "print(back['x'] + back['y'])\n"
+        )
+        self.assertIn("16", out)
+
+    def test_parse_list(self):
+        out = run_capture(
+            'import jsonx\n'
+            'nums: Any = jsonx.load_str("[1, 2, 3]")\n'
+            "print(len(nums))\n"
+            "print(nums[2])\n"
+        )
+        self.assertEqual(out.split(), ["3", "3"])
+
+
+class TestNetStdlib(unittest.TestCase):
+    """lib/net.ext — HTTP helpers in strict Externum."""
+
+    def test_http_get_graceful_failure(self):
+        # connection refused / bad host -> empty string, never a crash
+        out = run_capture(
+            "import net\n"
+            "b: Str = net.http_get('http://127.0.0.1:1/', 1.0)\n"
+            "print(b == '')\n"
+            "s: Int = net.http_get_status('http://127.0.0.1:1/', 1.0)\n"
+            "print(s == 0)\n"
+        )
+        self.assertEqual(out.split(), ["True", "True"])
+
+    def test_http_get_bad_host(self):
+        out = run_capture(
+            "import net\n"
+            "b: Str = net.http_get('http://nonexistent.invalid/', 1.0)\n"
+            "print(b == '')\n"
+        )
+        self.assertIn("True", out)
+
+
 if __name__ == "__main__":
     unittest.main()

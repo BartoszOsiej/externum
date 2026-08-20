@@ -197,5 +197,3 @@ docker run -it externum repl
 MIT
 
 ---
-
-> 🤖 Generated with [Codebuff](https://codebuff.com) · [Portfolio](https://bartoszosiej.github.io/Portfolio/)

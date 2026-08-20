@@ -1,0 +1,68 @@
+# egs_manifest.ext — NV-2.0 EGS build manifest generator (100% Externum).
+# Walks a build directory and writes manifest.json with every file's
+# name, byte size and sha256 — the exact data Epic's BuildPatchTool needs
+# when staging a build for the Epic Games Store.
+#
+# Usage:
+#   externum run tools/egs_manifest.ext -- <build-dir> [out.json]
+#
+# Example:
+#   externum run tools/egs_manifest.ext -- ../NV2_ENGINE/EGS/build egs_manifest.json
+
+import fs
+import drm
+import jsonx
+
+def walk(path: Str, base: Str, files: List[Any]) -> Void:
+    entries: List[Str] = fs.list_dir(path)
+    for name in entries:
+        full: Str = path + '/' + name
+        rel: Str = base + '/' + name
+        if fs.file_exists(full):
+            files.append(rel)
+        else:
+            walk(full, rel, files)
+
+def main() -> Int:
+    import sys
+    args: List[Str] = list(sys.argv[1:])
+    if len(args) < 1:
+        print('egs_manifest: usage: egs_manifest.ext <build-dir> [out.json]')
+        return 2
+    build_dir: Str = args[0]
+    mut out: Str = 'egs_manifest.json'
+    if len(args) >= 2:
+        out = args[1]
+    import os
+    if not os.path.isdir(build_dir):
+        print('egs_manifest: build dir not found:', build_dir)
+        return 3
+
+    files: List[Any] = []
+    walk(build_dir, '', files)
+    sorted_files: List[Any] = sorted(files)
+
+    entries: List[Any] = []
+    for rel in sorted_files:
+        full: Str = build_dir + '/' + rel
+        fh: Any = open(full, 'rb')
+        blob: Any = fh.read()
+        fh.close()
+        entries.append({
+            'path': rel,
+            'size': len(blob),
+            'sha256': drm.sha256_file(full),
+        })
+
+    payload: Dict[Str, Any] = {
+        'schema': 'nv2-egs-build-manifest',
+        'version': 1,
+        'generated_by': 'externum tools/egs_manifest.ext',
+        'files': entries,
+    }
+    jsonx.dump(out, payload, 2)
+    print('egs_manifest: wrote', out, 'with', len(entries), 'files')
+    return 0
+
+import sys
+sys.exit(main())

@@ -1,0 +1,29 @@
+# lib/json.ext — JSON helpers written in Externum (strict language)
+# Usage:  import jsonx  →  data: Any = jsonx.load("data.json")
+#
+# The module is named `jsonx` so it never shadows Python's stdlib `json`
+# when a program needs both. It wraps Python's json with sane defaults
+# (utf-8, indent for dumps, strict float parsing).
+
+def load(path: Str) -> Any:
+    import json
+    fh: Any = open(path, 'r', encoding='utf-8')
+    data: Any = json.load(fh)
+    fh.close()
+    return data
+
+def load_str(s: Str) -> Any:
+    import json
+    return json.loads(s)
+
+def dump(path: Str, data: Any, indent: Int = 2) -> Void:
+    import json
+    fh: Any = open(path, 'w', encoding='utf-8')
+    json.dump(data, fh, ensure_ascii=False, indent=indent)
+    fh.close()
+
+def dump_str(data: Any, indent: Int = 0) -> Str:
+    import json
+    if indent > 0:
+        return json.dumps(data, ensure_ascii=False, indent=indent)
+    return json.dumps(data, ensure_ascii=False)

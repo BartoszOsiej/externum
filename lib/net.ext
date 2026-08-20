@@ -1,0 +1,28 @@
+# lib/net.ext — HTTP helpers written in Externum (strict language)
+# Usage:  import net  →  body: Str = net.http_get("https://...")
+#
+# Thin wrapper over Python's urllib with a sane timeout, returning the
+# decoded body (utf-8). Errors return an empty string so callers can
+# fall back gracefully (NV-2.0 uses this pattern for NASA POWER).
+
+def http_get(url: Str, timeout: Float = 10.0) -> Str:
+    import urllib.request
+    try:
+        req: Any = urllib.request.Request(url, headers={'User-Agent': 'Externum/3.0 (+nv2)'})
+        resp: Any = urllib.request.urlopen(req, timeout=timeout)
+        raw: Any = resp.read()
+        resp.close()
+        return raw.decode('utf-8')
+    except:
+        return ''
+
+def http_get_status(url: Str, timeout: Float = 10.0) -> Int:
+    import urllib.request
+    try:
+        req: Any = urllib.request.Request(url, headers={'User-Agent': 'Externum/3.0 (+nv2)'})
+        resp: Any = urllib.request.urlopen(req, timeout=timeout)
+        code: Int = resp.getcode()
+        resp.close()
+        return code
+    except:
+        return 0
