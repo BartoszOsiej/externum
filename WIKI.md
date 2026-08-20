@@ -128,7 +128,9 @@ import os          # python stdlib also available
 ```
 
 Standard library (written in Externum, in `lib/`):
-`structs` (Stack, Queue, Counter), `strings`, `mathx`, `fs`.
+`structs` (Stack, Queue, Counter), `strings`, `mathx`, `fs`, `jsonx`
+(JSON load/dump), `net` (HTTP GET), `drm` (license keys, watermark,
+file/binary integrity).
 
 ### Bash integration
 
@@ -181,12 +183,12 @@ source (.ext) → Lexer → tokens → Parser → AST → Compiler → python/ba
 
 ## Tests
 
-`python3 -m unittest discover -s tests` — **167 tests** covering lexer,
+`python3 -m unittest discover -s tests` — **192 tests** covering lexer,
 parser, compiler and runtime (classes, exceptions, imports, lambdas,
 comprehensions, generators, stdlib, REPL), plus the NV2.0 suites:
-`tests/test_hardmode.py` (31: macros, match, ownership, traits, concurrency,
-esoteric operators) and `tests/test_drm.py` (16: license keys, watermark,
-tamper-detection, obfuscation, runtime guard, `drm.ext`, CLI).
+`tests/test_drm.py` (license keys, watermark, tamper-detection,
+obfuscation, runtime guard, unified key format, `drm.ext`, `keygen.ext`,
+`egs_manifest.ext`, CLI) and the stdlib suites (`jsonx`, `net`).
 
 ## License
 
@@ -238,5 +240,8 @@ free(p)       # double-free or @p after this line = compile error
 4. **Obfuscation** — string literals are base64-encoded and decoded through
    an injected `_ext_s()` helper.
 
-Standard library `lib/drm.ext` exposes `sign`, `verify`, `watermark` in
-Externum itself.
+Standard library `lib/drm.ext` exposes `make_license`, `verify_license`,
+`sign`, `verify`, `watermark` in Externum itself — using the **exact same
+base64 key format** as the CLI `externum keygen`, so keys issued in Python
+verify in Externum and vice versa. `tools/keygen.ext` issues keys
+entirely from Externum.

@@ -11,3 +11,6 @@ build/
 dist/
 *.egg-info/
 .backup/
+
+# build-generated launcher templates
+tools/generated/

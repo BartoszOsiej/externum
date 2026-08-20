@@ -156,6 +156,130 @@ main()
         self.assertIn('True', str(ns))
 
 
+class TestUnifiedKeyFormat(unittest.TestCase):
+    """The Externum stdlib (lib/drm.ext) and the Python CLI (drm.make_license)
+    must speak the exact same key format — a key issued by `externum keygen`
+    verifies in Externum, and a key signed in Externum verifies in Python."""
+
+    @staticmethod
+    def _run_capture(source: str) -> str:
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            RT.run(source)
+        return buf.getvalue()
+
+    def _ext_verify(self, key: str, secret: str) -> bool:
+        src = (
+            'import drm\n'
+            'def main():\n'
+            "    print(drm.verify('" + key + "', '" + secret + "'))\n"
+            'main()\n'
+        )
+        return 'True' in self._run_capture(src)
+
+    def test_cli_key_verifies_in_externum(self):
+        key = drm.make_license(SECRET, APP, AUTHOR)
+        self.assertTrue(self._ext_verify(key, SECRET))
+        self.assertFalse(self._ext_verify(key, 'wrong-secret'))
+
+    def test_ext_signed_key_matches_cli_format(self):
+        # keygen.ext / lib/drm.ext sign() must produce a key the Python CLI
+        # verifier accepts (same base64 payload format, not the old plain one)
+        src = """
+import drm
+
+def main():
+    print(drm.sign('s3cret', 'nv2-engine', 'NV-2.0'))
+main()
+"""
+        out = self._run_capture(src)
+        lines = [ln for ln in out.splitlines() if ln.startswith('bnYyLWVuZ2lu')]
+        self.assertEqual(len(lines), 1, out)
+        key = lines[0].strip()
+        # same payload as the CLI would produce: nv2-engine:NV-2.0:0
+        self.assertEqual(
+            base64.urlsafe_b64decode(key.encode()).decode().split(':')[:3],
+            ['nv2-engine', 'NV-2.0', '0'],
+        )
+        self.assertTrue(drm.verify_license(key, 's3cret'))
+        self.assertFalse(drm.verify_license(key, 'wrong'))
+
+    def test_ext_keygen_tool_issues_valid_keys(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        out = subprocess.run(
+            [sys.executable, '-m', 'externum', 'run',
+             os.path.join('tools', 'keygen.ext'), '--',
+             '--secret', SECRET, '--app-id', 'nv2-engine',
+             '--author', 'NV-2.0', '--count', '3'],
+            capture_output=True, text=True, cwd=root,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr)
+        keys = [ln.strip() for ln in out.stdout.splitlines() if ln.startswith('bnYyLWVuZ2lu')]
+        self.assertEqual(len(keys), 3)
+        for key in keys:
+            self.assertTrue(drm.verify_license(key, SECRET))
+
+    def test_ext_expired_key_rejected(self):
+        src = """
+import drm
+
+def main():
+    print(drm.verify_license(drm.make_license('s', 'a', 'b', 1), 's'))
+    print(drm.verify_license(drm.make_license('s', 'a', 'b', 0), 's'))
+main()
+"""
+        out = self._run_capture(src)
+        # expired key -> False; never-expiring -> True
+        self.assertIn('False', out)
+        self.assertIn('True', out)
+
+
+class TestEgsManifestTool(unittest.TestCase):
+    """tools/egs_manifest.ext — the EGS build manifest generator written in
+    Externum must hash every staged file (name, size, sha256) as JSON."""
+
+    def test_manifest_lists_files_with_hashes(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        tmp = tempfile.mkdtemp()
+        with open(os.path.join(tmp, 'game.exe'), 'w', encoding='utf-8') as fh:
+            fh.write('MZ fake exe')
+        with open(os.path.join(tmp, 'EULA.txt'), 'w', encoding='utf-8') as fh:
+            fh.write('license text')
+        out_json = os.path.join(tmp, 'manifest.json')
+        r = subprocess.run(
+            [sys.executable, '-m', 'externum', 'run',
+             os.path.join('tools', 'egs_manifest.ext'), '--', tmp, out_json],
+            capture_output=True, text=True, cwd=root,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(os.path.isfile(out_json))
+        import json as _json
+        with open(out_json, 'r', encoding='utf-8') as fh:
+            data = _json.load(fh)
+        names = {f['path'] for f in data['files']}
+        self.assertIn('/game.exe', names)
+        self.assertIn('/EULA.txt', names)
+        for f in data['files']:
+            if f['path'] == '/game.exe':
+                self.assertEqual(f['size'], 11)
+                self.assertEqual(
+                    f['sha256'],
+                    hashlib.sha256(b'MZ fake exe').hexdigest(),
+                )
+
+    def test_missing_build_dir_reports_error(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        r = subprocess.run(
+            [sys.executable, '-m', 'externum', 'run',
+             os.path.join('tools', 'egs_manifest.ext'), '--',
+             '/nonexistent/build/dir'],
+            capture_output=True, text=True, cwd=root,
+        )
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('not found', r.stdout + r.stderr)
+
+
 class TestCliSmoke(unittest.TestCase):
     def test_keygen_and_compile_cli(self):
         import subprocess, sys

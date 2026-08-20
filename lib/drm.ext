@@ -2,21 +2,53 @@
 # License signing, verification, watermarking and file/binary integrity —
 # usable from any program. This is the security layer NV-2.0 ships with:
 # everything here is Externum source (.ext), never hand-written Python.
+#
+# Key format (identical to the CLI `externum keygen`):
+#   base64( "app_id:author:expires:hmac_sha256_hex" )
+#   expires = unix timestamp, 0 = never. The secret never ships — the
+#   launcher embeds only the sha256 digest of a valid key.
 
-def sign(secret: Str, app_id: Str, author: Str) -> Str:
-    import hashlib, hmac
-    payload: Str = app_id + ':' + author
+def make_license(secret: Str, app_id: Str, author: Str, expires: Int = 0) -> Str:
+    import hashlib, hmac, base64
+    payload: Str = app_id + ':' + author + ':' + str(expires)
     sig: Str = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return payload + ':' + sig
+    raw: Str = payload + ':' + sig
+    return base64.urlsafe_b64encode(raw.encode()).decode()
 
-def verify(key: Str, secret: Str) -> Bool:
-    import hashlib, hmac
-    parts: List[Str] = key.split(':')
-    if len(parts) < 3:
+def verify_license(key: Str, secret: Str) -> Bool:
+    import hashlib, hmac, base64, time
+    try:
+        decoded: Str = base64.urlsafe_b64decode(key.encode()).decode()
+    except:
+        return False
+    parts: List[Str] = decoded.split(':')
+    if len(parts) < 4:
         return False
     payload: Str = ':'.join(parts[:-1])
+    sig: Str = parts[-1]
     expected: Str = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return hmac.compare_digest(parts[-1], expected)
+    if not hmac.compare_digest(sig, expected):
+        return False
+    fields: List[Str] = payload.split(':')
+    if len(fields) < 3:
+        return False
+    mut exp: Int = 0
+    try:
+        exp = int(fields[2])
+    except:
+        return False
+    if exp != 0 and time.time() > exp:
+        return False
+    return True
+
+# `sign` / `verify` are kept as aliases of the canonical key functions so
+# existing programs (tools/build_nv2.ext, tests) keep working — they now
+# use the exact same base64 format as the CLI keygen.
+def sign(secret: Str, app_id: Str, author: Str) -> Str:
+    return make_license(secret, app_id, author, 0)
+
+def verify(key: Str, secret: Str) -> Bool:
+    return verify_license(key, secret)
 
 def watermark(app_id: Str, author: Str) -> Str:
     import base64
