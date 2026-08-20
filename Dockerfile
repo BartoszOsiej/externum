@@ -1,6 +1,6 @@
 FROM python:3.12-slim AS builder
 WORKDIR /build
-COPY setup.py pyproject.toml .
+COPY setup.py .
 COPY lib ./lib
 COPY bin ./bin
 COPY externum ./externum
