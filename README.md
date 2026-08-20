@@ -1,5 +1,7 @@
 # Externum
 
+[![CI](https://github.com/BartoszOsiej/externum/actions/workflows/ci.yml/badge.svg)](https://github.com/BartoszOsiej/externum/actions)
+
 **Externum v3.0** — a full programming language blending Python readability,
 binary performance, and Bash system control. A single source compiles to
 **Python**, **Bash**, and a **binary** representation — or runs directly.
