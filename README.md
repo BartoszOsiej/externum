@@ -53,6 +53,42 @@ externum examples/hello.ext --target python -o hello.py
 externum examples/hello.ext --target bash
 ```
 
+## 🌐 Run it in your browser — and change the language
+
+**▶ [Live Playground](https://bartoszosiej.github.io/externum/)** — the full v3 runtime (Pyodide), zero server:
+
+- **Run** `.ext` programs, including inline Bash blocks
+- **Extend** the language live: write a module (or *describe* it) and hot-load it into the running interpreter — `import yourmodule` works instantly; sessions are shareable via URL
+- **Compile** to Python / Bash / binary targets side by side
+
+## 🧬 The stdlib evolves from GitHub comments
+
+On [the Playground issue](https://github.com/BartoszOsiej/externum/issues/7):
+
+````
+/run
+```ext
+x: Int = 0b1010
+print("hello", x)
+```
+````
+
+executes in the real runtime and replies with output. And:
+
+````
+/define module geometry
+```ext
+def circle_area(r: Float) -> Float:
+    return PI * r * r
+```
+````
+
+makes the bot validate your module against the type checker and open a PR into `lib/`. Once merged, `import geometry` works for **everyone** — the web playground loads the stdlib straight from main.
+
+<a href="https://codespaces.new/BartoszOsiej/externum?devcontainer_path=.devcontainer/devcontainer.json">
+  <img src="https://github.com/codespaces/badge.svg" alt="Open in GitHub Codespaces" />
+</a>
+
 <details>
 <summary><b>🧩 Example — pokedex.ext</b></summary>
 
