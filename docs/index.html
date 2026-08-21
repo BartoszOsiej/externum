@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Externum — Live Playground · a language you can extend from the browser</title>
+<meta name="description" content="Run and EXTEND the Externum programming language 100% in your browser. Write modules, hot-patch the stdlib, compile to Python and Bash — no server, no install.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬢</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="bg-blob b1"></div>
+<div class="bg-blob b2"></div>
+<div class="bg-blob b3"></div>
+
+<header>
+  <div class="brand">
+    <span class="logo">⬢</span>
+    <div>
+      <h1>Externum <em>Live Playground</em></h1>
+      <p>Run it. <b>Extend it.</b> Compile it — 100% in your browser, zero server.</p>
+    </div>
+  </div>
+  <nav>
+    <a href="https://github.com/BartoszOsiej/externum" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://pypi.org/project/externum/" target="_blank" rel="noopener">PyPI</a>
+    <a href="https://bartoszosiej.github.io/Docs/docs/externum" target="_blank" rel="noopener">Docs</a>
+  </nav>
+</header>
+
+<main>
+  <section class="tabs" role="tablist">
+    <button class="tab active" data-tab="run" role="tab">▶ Run</button>
+    <button class="tab" data-tab="extend" role="tab">🧬 Extend the language</button>
+    <button class="tab" data-tab="compile" role="tab">⚙ Compiled targets</button>
+  </section>
+
+  <!-- ============ RUN TAB ============ -->
+  <section id="panel-run" class="panel active">
+    <div class="toolbar">
+      <select id="example" aria-label="Load example">
+        <option value="hello">👋 Hello Externum</option>
+        <option value="oop">🏛️ OOP &amp; inheritance</option>
+        <option value="comprehensions">🧩 Comprehensions, lambdas, generators</option>
+        <option value="fstrings">🔤 F-strings &amp; dicts</option>
+        <option value="modules">📦 Stdlib imports</option>
+        <option value="shell">🐚 Inline Bash</option>
+        <option value="usemod">🧬 Use YOUR module</option>
+        <option value="pokedex">🐉 Pokédex demo</option>
+      </select>
+      <span class="spacer"></span>
+      <button id="share" class="ghost" title="Copy a link that restores this exact session">🔗 Share session</button>
+      <button id="run" class="primary">▶ Run <kbd>Ctrl+↵</kbd></button>
+    </div>
+    <div class="split">
+      <div class="col">
+        <div class="label">program.ext</div>
+        <textarea id="code" spellcheck="false" aria-label="Externum source"></textarea>
+      </div>
+      <div class="col">
+        <div class="label">output</div>
+        <pre id="output" class="console">— output appears here —</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EXTEND TAB ============ -->
+  <section id="panel-extend" class="panel">
+    <div class="extend-intro">
+      <h2>🧬 Hot-patch the language</h2>
+      <p>
+        Write an Externum module (or just <i>describe</i> one) and load it into the runtime
+        <b>while it is running</b>. Your module becomes importable instantly:
+        <code>import mymodule</code>. Modules persist in your browser and are embedded in
+        shared links. Want it in the official stdlib for <i>everyone</i>? Hit
+        <b>Propose to stdlib</b> — a GitHub Action validates it against the test suite and
+        opens a pull request into <code>lib/</code>.
+      </p>
+    </div>
+    <div class="split">
+      <div class="col">
+        <div class="label">module name</div>
+        <input id="modname" type="text" placeholder="mymodule" spellcheck="false" autocomplete="off">
+        <div class="label" style="margin-top:14px">mode</div>
+        <div class="seg">
+          <button class="segbtn active" data-mode="write">✍️ Write code</button>
+          <button class="segbtn" data-mode="describe">🗣️ Describe it</button>
+        </div>
+        <div class="label" id="descwrap" style="display:none;margin-top:14px">describe in plain words</div>
+        <textarea id="describe" style="display:none" spellcheck="false"
+          placeholder="e.g. a function cbrt(x) returning the cube root, and clamp(v, lo, hi) limiting v into range"></textarea>
+      </div>
+      <div class="col">
+        <div class="label">module source — <span id="modfile">mymodule.ext</span></div>
+        <textarea id="modcode" spellcheck="false" aria-label="Module source"></textarea>
+        <div class="modactions">
+          <button id="loadmod" class="primary">⚡ Load into runtime</button>
+          <button id="propose" class="ghost">⭐ Propose to stdlib (GitHub)</button>
+          <button id="genfromdesc" class="ghost" style="display:none">🪄 Generate skeleton</button>
+        </div>
+      </div>
+    </div>
+    <div class="modules-bar">
+      <span class="label">your modules:</span>
+      <div id="modlist" class="chips"><span class="chip empty">none yet — load one above</span></div>
+      <button id="clearmods" class="danger ghost">🗑 Remove all</button>
+    </div>
+  </section>
+
+  <!-- ============ COMPILE TAB ============ -->
+  <section id="panel-compile" class="panel">
+    <div class="toolbar">
+      <span class="hint-inline">The same source, compiled by the real Externum compiler — live.</span>
+      <span class="spacer"></span>
+      <button id="compile" class="primary">⚙ Compile all targets</button>
+    </div>
+    <div class="triple">
+      <div class="col">
+        <div class="label">→ python</div>
+        <pre id="out-python" class="console small">// press Compile</pre>
+      </div>
+      <div class="col">
+        <div class="label">→ bash</div>
+        <pre id="out-bash" class="console small">// press Compile</pre>
+      </div>
+      <div class="col">
+        <div class="label">→ binary (IR)</div>
+        <pre id="out-binary" class="console small">// press Compile</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span id="status" class="status idle">Runtime not loaded yet — press Run or Compile.</span>
+  <span class="right">Externum 3.0 “Sentient” · Pyodide (WASM CPython) · no telemetry, no server</span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

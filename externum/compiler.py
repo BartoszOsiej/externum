@@ -420,13 +420,16 @@ class Compiler:
     def _compile_BASH_BLOCK(self, node: ASTNode):
         code = node.value.strip()
         self.output['bash'].append(code)
-        escaped = code.replace('"', '\\"')
-        self.output['python'].append(f'{self._i()}subprocess.run("{escaped}", shell=True)')
+        # emit one subprocess call per line - embedding raw newlines inside a
+        # double-quoted python string produces an unterminated literal
+        for line in code.splitlines():
+            escaped = line.replace('\\', '\\\\').replace('"', '\\"')
+            self.output['python'].append(f'{self._i()}subprocess.run("{escaped}", shell=True)')
 
     def _compile_BASH_COMMAND(self, node: ASTNode):
         cmd = ' '.join(c.value for c in node.children if hasattr(c, 'value'))
         self.output['bash'].append(cmd)
-        escaped = cmd.replace('"', '\\"')
+        escaped = cmd.replace('\\', '\\\\').replace('"', '\\"')
         self.output['python'].append(f'{self._i()}subprocess.run("{escaped}", shell=True)')
 
     # ---------------------------------------------------------------- helpers
