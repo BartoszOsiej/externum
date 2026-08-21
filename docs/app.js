@@ -155,30 +155,6 @@ const DESCRIBE_TEMPLATE = (desc) => {
   return `# Module generated from description:\n# "${desc.trim()}"\n\n${body}\n`;
 };
 
-const DESCRIBE_TEMPLATE = (desc) => {
-  const funcs = [];
-  const re = /(?:function|func|fn)?\s*([a-zA-Z_][\w]*)\s*\(([^)]*)\)/g;
-  let m;
-  while ((m = re.exec(desc)) !== null) {
-    const [, name, args] = m;
-    if (['a', 'the', 'that', 'and', 'or'].includes(name)) continue;
-    const argList = args.split(',').map(s => s.trim()).filter(Boolean);
-    funcs.push({ name, args: argList });
-  }
-  if (funcs.length === 0) {
-    const words = desc.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(' ').filter(Boolean);
-    const name = words.find(w => w.length > 3) || 'my_function';
-    funcs.push({ name, args: ['x'] });
-  }
-  const body = funcs.map(f =>
-`def ${f.name}(${f.args.join(', ')}):
-    """${desc.trim().slice(0, 120)}"""
-    # TODO: implement — or propose it to the stdlib!
-    raise NotImplementedError("${f.name} is not implemented yet")`
-  ).join('\n\n');
-  return `# Module generated from description:\n# "${desc.trim()}"\n\n${body}\n`;
-};
-
 /* ---------------- state ---------------- */
 let pyodide = null;
 let booting = null;
