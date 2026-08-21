@@ -1,5 +1,8 @@
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:0d1117,50:0969da,100:f0883e&height=140&section=header&text=Externum&fontSize=38&fontColor=fff&desc=a%20programming%20language%20from%20scratch%20%C2%B7%20one%20source%2C%20three%20targets&descSize=15&descAlignY=72" width="100%" />
 
+
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/externum/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/externum)
+
 <div align="center">
 
 [![PyPI](https://img.shields.io/pypi/v/externum?style=for-the-badge&logo=pypi)](https://pypi.org/project/externum/)
