@@ -1,0 +1,53 @@
+name: VHS TUI Demos
+
+on:
+  push:
+    branches: [main]
+    paths: ['**/*.vhs', '.github/workflows/vhs.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install VHS
+        run: |
+          curl -sLO https://github.com/charmbracelet/vhs/releases/latest/download/vhs_linux_amd64.tar.gz
+          tar xzf vhs_linux_amd64.tar.gz
+          sudo mv vhs /usr/local/bin/
+
+      - name: Install Externum
+        run: pip install -e .
+
+      - name: Render .vhs tapes to GIF
+        run: |
+          mkdir -p assets
+          for tape in demos/*.vhs; do
+            name=$(basename "$tape" .vhs)
+            vhs "$tape" -o "assets/${name}.gif"
+            echo "Rendered: assets/${name}.gif"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vhs-demos
+          path: assets/*.gif
+          retention-days: 30
+
+      - name: Commit rendered GIFs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/*.gif
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: re-render VHS demos [skip ci]"
+            git push
+          fi
