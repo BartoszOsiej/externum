@@ -260,6 +260,12 @@ curl -sL https://raw.githubusercontent.com/BartoszOsiej/externum/main/verify.sh 
 
 ---
 
+## Why?
+
+Because most languages force you to choose: readable or fast, scripting or systems, batteries or minimal. Externum lets you write once and deploy everywhere — from a Python notebook to a Bash script to a compiled binary. The browser playground means anyone can try it in 5 seconds. The issue-command bot means the community shapes the language.
+
+---
+
 ## License
 
 MIT
