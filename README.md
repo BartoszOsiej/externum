@@ -14,7 +14,7 @@ binary representation — or runs directly.**
 Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 ```
 
-> 🇵🇱 [Wersja polska](README.pl.md) · [Documentation](https://bartoszosiej.github.io/Docs/projects/externum/) · [Language Spec (WIKI)](WIKI.md)
+> 🇵🇱 [Wersja polska](README.pl.md) · [Documentation](https://bartoszosiej.github.io/Docs/projects/externum/) · [Language Spec (WIKI)](WIKI.md) · [![Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/BartoszOsiej/externum)
 
 ---
 
@@ -24,9 +24,11 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 - [Installation](#installation)
 - [Usage](#usage)
 - [Example](#example)
+- [Browser Playground & Bot](#browser-playground--bot)
 - [Standard Library](#standard-library)
 - [NV2.0 Hard Mode](#nv20-hard-mode)
 - [DRM System](#drm-system)
+- [Verify](#verify)
 - [Project Structure](#project-structure)
 - [Tests](#tests)
 - [Docker](#docker)
@@ -99,6 +101,57 @@ fire_team = [p.name for p in squad if p.is_type("fire")]
 weakest = min(squad, key=lambda p: p.hp)
 nums = [f for f in fibonacci(10) if f % 2 == 0]
 ```
+
+---
+
+## Demos
+
+> 🎬 VHS-powered TUI recordings — rendered in CI, auto-committed as GIFs.
+
+| Demo | Preview |
+|------|---------|
+| **REPL** | ![REPL](assets/repl.gif) |
+| **Compile** | ![Compile](assets/compile.gif) |
+| **Hard Mode** | ![Hard Mode](assets/hardmode.gif) |
+
+---
+
+## Browser Playground & Bot
+
+### 🌐 Live Playground
+
+Try Externum **in your browser** — zero install, zero server. The transpiler
+runs inside [Pyodide](https://pyodide.org/) (Python compiled to WASM):
+
+```bash
+# Open in Codespaces and run:
+externum repl
+
+# Or open the browser playground:
+https://bartoszosiej.github.io/externum/
+```
+
+| What works | What doesn't (browser sandbox) |
+|---|---|
+| Full REPL with custom functions | Shell `` `cmd` `` and `%% ... %%` blocks |
+| Classes, lambdas, comprehensions | File I/O (sandboxed filesystem) |
+| Stdlib: mathx, strings, structs | Binary compilation (Python target only) |
+
+### 🤖 Issue-Command Bot
+
+Extend Externum from GitHub Issues — no local setup needed:
+
+| Command | What it does | Example |
+|---|---|---|
+| `/run <code>` | Execute Externum code in CI | `/run print(2 + 2)` |
+| `/define <name> <body>` | Add a new stdlib function via PR | `/define clamp(x, lo, hi) if x < lo: return lo ...` |
+
+The bot parses Issue comments, generates a PR with the new function + tests,
+and runs the full 192-test suite before merge. Language evolves through
+community contributions.
+
+> 📦 See PR [#8](https://github.com/BartoszOsiej/externum/pull/8) for the
+> merged `/run` + `/define` implementation.
 
 ---
 
@@ -188,6 +241,19 @@ docker run --rm externum run examples/hello.ext
 
 # REPL
 docker run -it externum repl
+```
+
+---
+
+## Verify
+
+One-click verification of cosign signatures, SLSA attestation, and SBOM
+for any release artifact:
+
+```bash
+curl -sL https://raw.githubusercontent.com/BartoszOsiej/externum/main/verify.sh | bash
+# or
+./verify.sh
 ```
 
 ---
