@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d1117"/>
+      <stop offset="100%" style="stop-color:#161b22"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="40" y="40" width="1200" height="560" rx="16" fill="none" stroke="url(#accent)" stroke-width="2" opacity="0.3"/>
+  
+  <!-- Lightning bolt icon -->
+  <text x="640" y="180" font-family="monospace" font-size="80" fill="url(#accent)" text-anchor="middle">⚡</text>
+  
+  <!-- Title -->
+  <text x="640" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="bold" fill="#f0f6fc" text-anchor="middle">Externum</text>
+  
+  <!-- Subtitle -->
+  <text x="640" y="340" font-family="monospace" font-size="28" fill="#8b949e" text-anchor="middle">Python ⊕ Binary ⊕ Bash</text>
+  
+  <!-- Feature badges -->
+  <rect x="280" y="380" width="200" height="48" rx="24" fill="#1f6feb" opacity="0.2"/>
+  <text x="380" y="410" font-family="monospace" font-size="18" fill="#58a6ff" text-anchor="middle">REPL + Playground</text>
+  
+  <rect x="520" y="380" width="180" height="48" rx="24" fill="#238636" opacity="0.2"/>
+  <text x="610" y="410" font-family="monospace" font-size="18" fill="#3fb950" text-anchor="middle">192 Tests</text>
+  
+  <rect x="740" y="380" width="160" height="48" rx="24" fill="#da3633" opacity="0.2"/>
+  <text x="820" y="410" font-family="monospace" font-size="18" fill="#f85149" text-anchor="middle">DRM System</text>
+  
+  <!-- Stats line -->
+  <text x="640" y="480" font-family="monospace" font-size="20" fill="#484f58" text-anchor="middle">PyPI 2.0.0 · Docker GHCR · OpenSSF Scorecard</text>
+  
+  <!-- Bottom line -->
+  <rect x="280" y="520" width="720" height="2" fill="url(#accent)" opacity="0.5"/>
+  <text x="640" y="560" font-family="system-ui, sans-serif" font-size="18" fill="#484f58" text-anchor="middle">github.com/BartoszOsiej/externum</text>
+</svg>
