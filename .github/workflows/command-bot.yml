@@ -163,7 +163,9 @@ jobs:
       - name: Open PR into the stdlib
         id: pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # a user PAT is required: repos can forbid GITHUB_TOKEN from
+          # creating pull requests, and this one does (correctly)
+          GH_TOKEN: ${{ secrets.BOT_TOKEN }}
           NAME: ${{ steps.parse.outputs.name }}
           NUMBER: ${{ github.event.issue.number }}
           ACTOR: ${{ github.event.comment.user.login }}
