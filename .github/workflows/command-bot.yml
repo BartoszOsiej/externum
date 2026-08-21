@@ -1,0 +1,207 @@
+name: command-bot
+
+# /run  — execute an ```ext code block from a comment in the real runtime
+# /define module <name> — validate a proposed stdlib module and open a PR
+#   into lib/ so the language itself evolves from GitHub comments.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: cmd-${{ github.event.comment.id }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: ${{ !github.event.issue.pull_request && startsWith(github.event.comment.body, '/run') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Extract code block
+        id: extract
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          body = os.environ["COMMENT"]
+          m = re.search(r"```(?:ext|externum)?\s*\n(.*?)```", body, re.S)
+          if not m:
+              print("::error::no ```ext code block found in the comment")
+              sys.exit(1)
+          with open("/tmp/program.ext", "w") as fh:
+              fh.write(m.group(1))
+          PY
+
+      - name: Execute in the Externum runtime
+        id: exec
+        run: |
+          set +e
+          OUT=$(timeout 30 python3 - <<'PY'
+          import sys, io, contextlib
+          sys.path.insert(0, ".")
+          from externum import Runtime
+          src = open("/tmp/program.ext").read()
+          buf = io.StringIO()
+          with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+              try:
+                  Runtime(search_roots=[".", "lib"]).run(src)
+                  print(f"__EXIT__0{buf.getvalue()}")
+              except Exception as e:
+                  print(f"__EXIT__1{type(e).__name__}: {e}\n{buf.getvalue()}")
+          PY
+          )
+          CODE=$(sed -n 's/^__EXIT__\([01]\).*/\1/p' <<< "$OUT" | head -c1)
+          BODY=$(sed 's/^__EXIT__[01]//' <<< "$OUT")
+          {
+            echo "code=${CODE:-1}"
+            echo "output<<EOF"
+            printf '%s\n' "$BODY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CODE: ${{ steps.exec.outputs.code }}
+          OUTPUT: ${{ steps.exec.outputs.output }}
+          NUMBER: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          if [[ "$CODE" == "0" ]]; then
+            gh api repos/${{ github.repository }}/issues/$NUMBER/reactions -f content="+1" >/dev/null
+            VERDICT="✅ **exit 0**"
+          else
+            gh api repos/${{ github.repository }}/issues/$NUMBER/reactions -f content="-1" >/dev/null
+            VERDICT="❌ **error**"
+          fi
+          {
+            echo "@${ACTOR} your program ran in the real Externum runtime:"
+            echo ""
+            echo "$VERDICT"
+            echo ""
+            echo '```'
+            head -c 3500 <<< "$OUTPUT"
+            echo '```'
+            echo ""
+            echo "<sub>externum \$(python3 -c 'from externum import __version__; print(__version__)') · sandboxed runner · 30 s timeout · try it live: https://bartoszosiej.github.io/externum/</sub>"
+          } > body.md
+          gh issue comment $NUMBER --body-file body.md
+
+  define:
+    if: ${{ !github.event.issue.pull_request && startsWith(github.event.comment.body, '/define') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Parse proposal
+        id: parse
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          body = os.environ["COMMENT"]
+          first = body.splitlines()[0].strip()
+          m = re.match(r"/define\s+module\s+([A-Za-z_][\w]*)", first)
+          if not m:
+              print("::error::usage: /define module <name> followed by an ```ext block")
+              sys.exit(1)
+          name = m.group(1)
+          if name in ("mathx", "strings", "structs", "fs", "drm"):
+              print(f"::error::{name} already exists in the stdlib")
+              sys.exit(1)
+          cm = re.search(r"```(?:ext|externum)?\s*\n(.*?)```", body, re.S)
+          if not cm:
+              print("::error::no ```ext code block found")
+              sys.exit(1)
+          with open("/tmp/module.ext", "w") as fh:
+              fh.write(cm.group(1))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"name={name}\n")
+          PY
+
+      - name: Validate against the language
+        run: |
+          cp /tmp/module.ext "lib/${{ steps.parse.outputs.name }}.ext"
+          python3 - <<'PY'
+          import sys, io, contextlib
+          sys.path.insert(0, ".")
+          from externum import Runtime
+          name = "${{ steps.parse.outputs.name }}"
+          probe = f'import {name}\nprint("module {name} imports cleanly")'
+          buf = io.StringIO()
+          with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+              try:
+                  Runtime(search_roots=[".", "lib"]).run(probe)
+              except Exception as e:
+                  print(f"::error::module failed validation: {type(e).__name__}: {e}")
+                  sys.exit(1)
+          if "imports cleanly" not in buf.getvalue():
+              print("::error::module did not import cleanly")
+              sys.exit(1)
+          print("validation OK:", buf.getvalue().strip())
+          PY
+
+      - name: Open PR into the stdlib
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAME: ${{ steps.parse.outputs.name }}
+          NUMBER: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          BRANCH="stdlib/$NAME-$NUMBER"
+          git config user.name "externum-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add "lib/$NAME.ext"
+          git commit -m "stdlib: add $NAME module (proposed by @$ACTOR in #$NUMBER)"
+          git push origin "$BRANCH"
+
+          {
+            echo "### 🧬 New stdlib module: \`$NAME\`"
+            echo ""
+            echo "Proposed by @${ACTOR} in #$NUMBER via \`/define\`."
+            echo ""
+            echo "<sub>The web playground loads stdlib modules straight from this branch's main — once merged, everyone can \`import $NAME\` in the browser.</sub>"
+          } > pr.md
+          PR_URL=$(gh pr create \
+            --title "stdlib: add $NAME module" \
+            --body-file pr.md \
+            --head "$BRANCH" \
+            --base main)
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.event.comment.user.login }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          NAME: ${{ steps.parse.outputs.name }}
+        run: |
+          gh api repos/${{ github.repository }}/issues/$NUMBER/reactions -f content="rocket" >/dev/null
+          {
+            echo "@${ACTOR} module \`${NAME}\` passed validation and is up for review: $PR_URL"
+            echo ""
+            echo "Once merged, \`import ${NAME}\` works for **everyone** — including the [web playground](https://bartoszosiej.github.io/externum/), which loads the stdlib live from main."
+          } > body.md
+          gh issue comment $NUMBER --body-file body.md
