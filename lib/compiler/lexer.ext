@@ -1,0 +1,372 @@
+# Externum Compiler — Lexer
+# Written in Externum itself
+
+# ── keywords table ───────────────────────────────────────────────────
+let KEYWORDS = [
+    ["def", "DEF"], ["class", "CLASS"], ["if", "IF"], ["elif", "ELIF"],
+    ["else", "ELSE"], ["while", "WHILE"], ["for", "FOR"], ["return", "RETURN"],
+    ["break", "BREAK"], ["continue", "CONTINUE"], ["pass", "PASS"],
+    ["import", "IMPORT"], ["from", "FROM"], ["as", "AS"],
+    ["yield", "YIELD"], ["try", "TRY"], ["except", "EXCEPT"],
+    ["finally", "FINALLY"], ["raise", "RAISE"], ["assert", "ASSERT"],
+    ["with", "WITH"], ["let", "LET"], ["const", "CONST"],
+    ["struct", "STRUCT"], ["enum", "ENUM"], ["trait", "TRAIT"],
+    ["impl", "IMPL"], ["match", "MATCH"], ["case", "CASE"],
+    ["loop", "LOOP"], ["defer", "DEFER"], ["self", "SELF"],
+    ["and", "AND"], ["or", "OR"], ["not", "NOT"], ["in", "IN"], ["is", "IS"],
+    ["lambda", "LAMBDA"], ["async", "ASYNC"], ["await", "AWAIT"],
+    ["spawn", "SPAWN"], ["chan", "CHAN"], ["send", "SEND"], ["recv", "RECV"],
+    ["alloc", "ALLOC"], ["free", "FREE"], ["mut", "MUT"],
+    ["ref", "REF"], ["deref", "DEREF"], ["unsafe", "UNSAFE"],
+    ["macro", "MACRO"], ["comptime", "COMPTIME"], ["static", "STATIC"],
+    ["pub", "PUB"], ["effect", "EFFECT"], ["region", "REGION"],
+    ["where", "WHERE"], ["open", "OPEN"], ["del", "DEL"],
+    ["True", "TRUE"], ["False", "FALSE"], ["None", "NONE"],
+]
+
+# ── builtins table ───────────────────────────────────────────────────
+let BUILTINS = [
+    "print", "len", "str", "int", "float", "bool", "range", "type",
+    "input", "isinstance", "repr", "id", "hash", "min", "max", "sum",
+    "abs", "round", "sorted", "enumerate", "zip", "reversed",
+    "chr", "ord", "hex", "oct", "bin", "format", "list", "dict",
+    "tuple", "set", "open", "Ok", "Err", "Some", "Result", "Option",
+    "panic", "dbg", "trace", "assert_eq", "unreachable",
+    "alloc", "free", "addr", "sizeof", "spawn", "chan", "send", "recv",
+]
+
+# ── lexer state ──────────────────────────────────────────────────────
+struct LexerState:
+    source
+    pos
+    line
+    col
+    tokens
+    indent_stack
+    pending_dedents
+
+def lexer_new(source):
+    return LexerState(source, 0, 1, 0, [], [0], 0)
+
+# ── helpers ──────────────────────────────────────────────────────────
+def peek(state):
+    if state.pos < len(state.source):
+        return state.source[state.pos]
+    return "\0"
+
+def peek2(state):
+    if state.pos + 1 < len(state.source):
+        return state.source[state.pos + 1]
+    return "\0"
+
+def advance(state):
+    ch = state.source[state.pos]
+    state.pos = state.pos + 1
+    if ch == "\n":
+        state.line = state.line + 1
+        state.col = 0
+    else:
+        state.col = state.col + 1
+    return ch
+
+def emit(state, type, value):
+    state.tokens = state.tokens + [Token(type, value, state.line, state.col)]
+
+def is_digit(ch):
+    return ch >= "0" and ch <= "9"
+
+def is_alpha(ch):
+    return (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z") or ch == "_"
+
+def is_alnum(ch):
+    return is_alpha(ch) or is_digit(ch)
+
+# ── keyword lookup ───────────────────────────────────────────────────
+def lookup_keyword(name):
+    let i = 0
+    while i < len(KEYWORDS):
+        if name == KEYWORDS[i][0]:
+            return KEYWORDS[i][1]
+        i = i + 1
+    return ""
+
+def is_builtin(name):
+    let i = 0
+    while i < len(BUILTINS):
+        if name == BUILTINS[i]:
+            return True
+        i = i + 1
+    return False
+
+# ── skip spaces (not newlines) ──────────────────────────────────────
+def skip_spaces(state):
+    while state.pos < len(state.source):
+        let ch = peek(state)
+        if ch == " " or ch == "\t" or ch == "\r":
+            advance(state)
+        elif ch == "#":
+            # line comment
+            while state.pos < len(state.source) and peek(state) != "\n":
+                advance(state)
+        else:
+            break
+
+# ── read string literal ──────────────────────────────────────────────
+def read_string(state, quote):
+    let start = state.pos
+    let line = state.line
+    let col = state.col
+    advance(state)  # skip opening quote
+    let value = ""
+    while state.pos < len(state.source):
+        let ch = peek(state)
+        if ch == "\\":
+            advance(state)
+            let esc = advance(state)
+            if esc == "n":
+                value = value + "\n"
+            elif esc == "t":
+                value = value + "\t"
+            elif esc == "\\":
+                value = value + "\\"
+            elif esc == quote:
+                value = value + quote
+            else:
+                value = value + esc
+        elif ch == quote:
+            advance(state)
+            return Token("STRING", quote + value + quote, line, col)
+        elif ch == "\n":
+            break
+        else:
+            value = value + advance(state)
+    return Token("STRING", quote + value + quote, line, col)
+
+# ── read char literal ────────────────────────────────────────────────
+def read_char(state):
+    let line = state.line
+    let col = state.col
+    advance(state)  # skip '
+    let ch = advance(state)
+    if ch == "\\":
+        let esc = advance(state)
+        advance(state)  # skip closing '
+        if esc == "n":
+            return Token("CHAR", "'\\n'", line, col)
+        elif esc == "t":
+            return Token("CHAR", "'\\t'", line, col)
+        elif esc == "\\":
+            return Token("CHAR", "'\\\\'", line, col)
+        else:
+            return Token("CHAR", "'" + esc + "'", line, col)
+    advance(state)  # skip closing '
+    return Token("CHAR", "'" + ch + "'", line, col)
+
+# ── read number ──────────────────────────────────────────────────────
+def read_number(state):
+    let line = state.line
+    let col = state.col
+    let value = ""
+
+    # hex
+    if peek(state) == "0" and peek2(state) == "x":
+        value = value + advance(state)
+        value = value + advance(state)
+        while state.pos < len(state.source) and is_alnum(peek(state)):
+            value = value + advance(state)
+        return Token("HEX_NUMBER", value, line, col)
+
+    # binary
+    if peek(state) == "0" and peek2(state) == "b":
+        value = value + advance(state)
+        value = value + advance(state)
+        while state.pos < len(state.source) and (peek(state) == "0" or peek(state) == "1"):
+            value = value + advance(state)
+        return Token("BINARY_NUMBER", value, line, col)
+
+    # octal
+    if peek(state) == "0" and peek2(state) == "o":
+        value = value + advance(state)
+        value = value + advance(state)
+        while state.pos < len(state.source) and peek(state) >= "0" and peek(state) <= "7":
+            value = value + advance(state)
+        return Token("OCTAL_NUMBER", value, line, col)
+
+    # decimal
+    while state.pos < len(state.source) and is_digit(peek(state)):
+        value = value + advance(state)
+
+    # float
+    if peek(state) == "." and is_digit(peek2(state)):
+        value = value + advance(state)
+        while state.pos < len(state.source) and is_digit(peek(state)):
+            value = value + advance(state)
+
+    # scientific notation
+    if peek(state) == "e" or peek(state) == "E":
+        value = value + advance(state)
+        if peek(state) == "+" or peek(state) == "-":
+            value = value + advance(state)
+        while state.pos < len(state.source) and is_digit(peek(state)):
+            value = value + advance(state)
+
+    return Token("NUMBER", value, line, col)
+
+# ── read identifier / keyword ────────────────────────────────────────
+def read_identifier(state):
+    let line = state.line
+    let col = state.col
+    let value = ""
+    while state.pos < len(state.source) and is_alnum(peek(state)):
+        value = value + advance(state)
+
+    let kw = lookup_keyword(value)
+    if kw != "":
+        return Token(kw, value, line, col)
+
+    if is_builtin(value):
+        return Token("BUILTIN", value, line, col)
+
+    return Token("IDENTIFIER", value, line, col)
+
+# ── handle indent/dedent ────────────────────────────────────────────
+def handle_newline(state):
+    let line = state.line
+    let col = state.col
+    advance(state)  # skip \n
+    skip_spaces(state)
+
+    # blank line or comment-only line
+    if peek(state) == "\n" or peek(state) == "#" or peek(state) == "\0":
+        return
+
+    # count indentation
+    let indent = 0
+    let saved_pos = state.pos
+    while state.pos < len(state.source):
+        let ch = peek(state)
+        if ch == " ":
+            indent = indent + 1
+            advance(state)
+        elif ch == "\t":
+            indent = indent + 4
+            advance(state)
+        else:
+            break
+
+    let current = state.indent_stack[len(state.indent_stack) - 1]
+
+    if indent > current:
+        state.indent_stack = state.indent_stack + [indent]
+        emit(state, "INDENT", indent)
+    elif indent < current:
+        while len(state.indent_stack) > 1 and state.indent_stack[len(state.indent_stack) - 1] > indent:
+            state.indent_stack = state.indent_stack[0:len(state.indent_stack) - 1]
+            emit(state, "DEDENT", 0)
+    else:
+        emit(state, "NEWLINE", "\n")
+
+# ── main tokenize function ──────────────────────────────────────────
+def tokenize(source):
+    let state = lexer_new(source)
+
+    while state.pos < len(state.source):
+        let ch = peek(state)
+
+        # newline
+        if ch == "\n":
+            handle_newline(state)
+        # spaces
+        elif ch == " " or ch == "\t" or ch == "\r":
+            advance(state)
+        # comment
+        elif ch == "#":
+            while state.pos < len(state.source) and peek(state) != "\n":
+                advance(state)
+        # string
+        elif ch == '"' or ch == "'":
+            let tok = read_string(state, ch)
+            emit(state, tok.type, tok.value)
+        # char literal
+        elif ch == "'" and peek2(state) != "'":
+            let tok = read_char(state)
+            emit(state, tok.type, tok.value)
+        # number
+        elif is_digit(ch):
+            let tok = read_number(state)
+            emit(state, tok.type, tok.value)
+        # identifier / keyword
+        elif is_alpha(ch):
+            let tok = read_identifier(state)
+            emit(state, tok.type, tok.value)
+        # operators and delimiters
+        else:
+            let line = state.line
+            let col = state.col
+
+            # two-char operators
+            if state.pos + 1 < len(state.source):
+                let two = ch + peek2(state)
+                if two == "**":
+                    emit(state, "**", "**"); advance(state); advance(state)
+                elif two == "//":
+                    emit(state, "//", "//"); advance(state); advance(state)
+                elif two == "==":
+                    emit(state, "==", "=="); advance(state); advance(state)
+                elif two == "!=":
+                    emit(state, "!=", "!="); advance(state); advance(state)
+                elif two == "<=":
+                    emit(state, "<=", "<="); advance(state); advance(state)
+                elif two == ">=":
+                    emit(state, ">=", ">="); advance(state); advance(state)
+                elif two == "+=":
+                    emit(state, "+=", "+="); advance(state); advance(state)
+                elif two == "-=":
+                    emit(state, "-=", "-="); advance(state); advance(state)
+                elif two == "*=":
+                    emit(state, "*=", "*="); advance(state); advance(state)
+                elif two == "/=":
+                    emit(state, "/=", "/="); advance(state); advance(state)
+                elif two == "%=":
+                    emit(state, "%=", "%="); advance(state); advance(state)
+                elif two == "&=":
+                    emit(state, "&=", "&="); advance(state); advance(state)
+                elif two == "|=":
+                    emit(state, "|=", "|="); advance(state); advance(state)
+                elif two == "^=":
+                    emit(state, "^=", "^="); advance(state); advance(state)
+                elif two == "<<":
+                    emit(state, "<<", "<<"); advance(state); advance(state)
+                elif two == ">>":
+                    emit(state, ">>", ">>"); advance(state); advance(state)
+                elif two == "<<=":
+                    emit(state, "<<=", "<<="); advance(state); advance(state)
+                elif two == ">>=":
+                    emit(state, ">>=", ">>="); advance(state); advance(state)
+                elif two == "..":
+                    emit(state, "..", ".."); advance(state); advance(state)
+                elif two == "::":
+                    emit(state, "::", "::"); advance(state); advance(state)
+                elif two == "->":
+                    emit(state, "->", "->"); advance(state); advance(state)
+                elif two == "=>":
+                    emit(state, "=>", "=>"); advance(state); advance(state)
+                elif two == "|>":
+                    emit(state, "|>", "|>"); advance(state); advance(state)
+                elif two == "//":
+                    emit(state, "//", "//"); advance(state); advance(state)
+                else:
+                    # single-char
+                    advance(state)
+                    emit(state, ch, ch)
+            else:
+                advance(state)
+                emit(state, ch, ch)
+
+    # final dedents
+    while len(state.indent_stack) > 1:
+        state.indent_stack = state.indent_stack[0:len(state.indent_stack) - 1]
+        emit(state, "DEDENT", 0)
+
+    emit(state, "EOF", "")
+    return state.tokens

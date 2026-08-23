@@ -8,9 +8,8 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/BartoszOsiej/externum/badge)](https://securityscorecards.dev/viewer/?uri=github.com/BartoszOsiej/externum)
 [![OpenSSF Best Practices](https://img.shields.io/badge/OpenSSF-Best%20Practices-brightgreen?style=flat-square)](https://www.bestpractices.dev/projects/externum)
 
-**A full programming language blending Python readability, binary performance,
-and Bash system control. A single source compiles to Python, Bash, and a
-binary representation — or runs directly.**
+**A self-hosted programming language blending Python readability, binary performance,
+and Bash system control. The compiler is written in Externum itself — bootstrap with a minimal Python runtime.**
 
 ```
 Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control

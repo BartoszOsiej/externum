@@ -1,0 +1,46 @@
+# Externum Compiler — Type Definitions
+# Written in Externum
+
+# ── Token ────────────────────────────────────────────────────────────
+struct Token:
+    type
+    value
+    line
+    col
+
+def token_new(type, value, line, col):
+    return Token(type, value, line, col)
+
+def token_repr(tok):
+    return "Token(" + tok.type + ", " + repr(tok.value) + ")"
+
+# ── AST Node ─────────────────────────────────────────────────────────
+struct ASTNode:
+    type
+    value
+    children
+
+def ast_new(type, value, children):
+    return ASTNode(type, value, children)
+
+def ast_leaf(type, value):
+    return ASTNode(type, value, [])
+
+# ── Source Location ──────────────────────────────────────────────────
+struct SourceLocation:
+    file
+    line
+    col
+
+# ── Error types ──────────────────────────────────────────────────────
+struct CompileError:
+    message
+    location
+
+def error_new(msg, loc=None):
+    return CompileError(msg, loc)
+
+def error_msg(err):
+    if err.location:
+        return err.location.file + ":" + str(err.location.line) + ":" + str(err.location.col) + ": " + err.message
+    return err.message
