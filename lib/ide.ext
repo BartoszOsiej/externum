@@ -1,0 +1,752 @@
+# ── Externum TUI IDE ────────────────────────────────────────────────
+# Written in Externum.  Features:
+#   - syntax highlighting (keywords, strings, comments, numbers)
+#   - line numbers
+#   - file open / save
+#   - cursor navigation, scrolling
+#   - normal / insert / command modes
+#   - word-motion, replace, delete-line, open-line
+
+# ── globals ──────────────────────────────────────────────────────────
+const APP_NAME = "Externum IDE"
+const VERSION = "1.0"
+
+let buffer = []
+let cursor_row = 0
+let cursor_col = 0
+let scroll_top = 0
+let modified = False
+let filename = ""
+let mode = "normal"
+let status_msg = ""
+let screen_rows = 0
+let screen_cols = 0
+let gutter_width = 0
+let editor_top = 0
+let editor_height = 0
+let total_lines = 0
+let command_buffer = ""
+
+# ── Externum keywords for syntax highlighting ──
+let KW_LIST = [
+    "def", "return", "let", "const", "if", "else", "while", "for", "loop",
+    "break", "continue", "match", "case", "struct", "enum", "trait", "impl",
+    "import", "from", "as", "class", "try", "except", "finally",
+    "raise", "with", "yield", "async", "await", "spawn", "chan", "send",
+    "recv", "defer", "alloc", "free", "mut", "ref", "deref", "unsafe",
+    "macro", "comptime", "static", "True", "False", "None", "self",
+    "and", "or", "not", "in", "is", "pass", "print", "len", "str",
+    "int", "float", "range", "open", "type", "input",
+]
+
+# ── helpers ──────────────────────────────────────────────────────────
+def is_keyword(word):
+    let i = 0
+    while i < len(KW_LIST):
+        if word == KW_LIST[i]:
+            return True
+        i = i + 1
+    return False
+
+def get_line(idx):
+    if idx >= 0 and idx < len(buffer):
+        return buffer[idx]
+    return ""
+
+def count_lines():
+    return len(buffer)
+
+def calc_gutter():
+    let n = count_lines()
+    if n < 10:
+        return 3
+    if n < 100:
+        return 4
+    if n < 1000:
+        return 5
+    return 6
+
+# ── syntax highlight ─────────────────────────────────────────────────
+def highlight_line(line):
+    let result = []
+    let i = 0
+    let ln = len(line)
+    while i < ln:
+        let ch = line[i]
+
+        # comment
+        if ch == '#':
+            let rest = ""
+            let j = i
+            while j < ln:
+                rest = rest + line[j]
+                j = j + 1
+            result = result + [[rest, 4]]
+            i = ln
+        # string literal
+        elif ch == '"' or ch == "'":
+            let quote = ch
+            let s = ch
+            let j = i + 1
+            while j < ln:
+                let c = line[j]
+                if c == '\\':
+                    s = s + c
+                    j = j + 1
+                    if j < ln:
+                        s = s + line[j]
+                        j = j + 1
+                elif c == quote:
+                    s = s + c
+                    j = j + 1
+                    break
+                else:
+                    s = s + c
+                    j = j + 1
+            result = result + [[s, 3]]
+            i = j
+        # number
+        elif ch >= '0' and ch <= '9':
+            let num = ""
+            let j = i
+            while j < ln:
+                let c = line[j]
+                if (c >= '0' and c <= '9') or c == '.' or c == 'x' or c == 'b':
+                    num = num + c
+                    j = j + 1
+                else:
+                    break
+            result = result + [[num, 6]]
+            i = j
+        # identifier / keyword
+        elif (ch >= 'a' and ch <= 'z') or (ch >= 'A' and ch <= 'Z') or ch == '_':
+            let word = ""
+            let j = i
+            while j < ln:
+                let c = line[j]
+                if (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_':
+                    word = word + c
+                    j = j + 1
+                else:
+                    break
+            if is_keyword(word):
+                result = result + [[word, 2]]
+            else:
+                result = result + [[word, 0]]
+            i = j
+        else:
+            result = result + [[ch, 0]]
+            i = i + 1
+
+    return result
+
+# ── render status bar ────────────────────────────────────────────────
+def render_statusbar():
+    let row = screen_rows - 2
+    let left = " " + APP_NAME + " " + VERSION + " "
+    let right = ""
+    if filename != "":
+        right = " " + filename + " "
+    else:
+        right = " [no file] "
+    if modified:
+        right = right + "[+] "
+    right = right + mode + " "
+    right = right + str(cursor_row + 1) + ":" + str(cursor_col + 1) + " "
+    right = right + str(count_lines()) + " lines "
+
+    let gap_len = screen_cols - len(left) - len(right)
+    let gap = ""
+    let g = 0
+    while g < gap_len:
+        gap = gap + " "
+        g = g + 1
+    let bar = left + gap + right
+
+    term_addstr(row, 0, bar, term_attr(1))
+
+    if status_msg != "":
+        term_addstr(row + 1, 0, " " + status_msg, term_attr(8))
+    else:
+        term_addstr(row + 1, 0, " : for commands, i to insert, ESC normal", term_attr(10))
+
+# ── render single editor line ────────────────────────────────────────
+def render_editor_line(row, line_idx, cols_available):
+    let line = get_line(line_idx)
+    let y = editor_top + row - scroll_top
+
+    # gutter
+    let num_str = str(line_idx + 1)
+    let padded = ""
+    let pad_needed = gutter_width - len(num_str) - 1
+    let p = 0
+    while p < pad_needed:
+        padded = padded + " "
+        p = p + 1
+    padded = padded + num_str + " "
+    term_addstr(y, 0, padded, term_attr(10))
+
+    # syntax highlighted content
+    let highlighted = highlight_line(line)
+    let x = gutter_width
+    let seg_i = 0
+    while seg_i < len(highlighted):
+        let seg = highlighted[seg_i]
+        let text = seg[0]
+        let color_id = seg[1]
+        let ci = 0
+        while ci < len(text):
+            if x >= screen_cols:
+                break
+            if color_id > 0:
+                term_addstr(y, x, text[ci], term_attr(color_id))
+            else:
+                term_addstr(y, x, text[ci], 0)
+            x = x + 1
+            ci = ci + 1
+        seg_i = seg_i + 1
+
+# ── render screen ────────────────────────────────────────────────────
+def render():
+    screen_rows = term_size()[0]
+    screen_cols = term_size()[1]
+    gutter_width = calc_gutter()
+    editor_top = 0
+    editor_height = screen_rows - 2
+
+    term_clear()
+
+    total_lines = count_lines()
+
+    let row = 0
+    while row < editor_height:
+        let line_idx = scroll_top + row
+        if line_idx < total_lines:
+            render_editor_line(row, line_idx, screen_cols)
+        else:
+            if total_lines == 0 and row == 0:
+                term_addstr(editor_top + row, gutter_width, "~ Empty buffer", term_attr(4))
+            elif line_idx >= total_lines:
+                term_addstr(editor_top + row, gutter_width, "~", term_attr(4))
+        row = row + 1
+
+    render_statusbar()
+
+    let cursor_y = editor_top + cursor_row - scroll_top
+    let cursor_x = gutter_width + cursor_col
+    term_move(cursor_y, cursor_x)
+
+    term_refresh()
+
+# ── scroll ───────────────────────────────────────────────────────────
+def ensure_visible():
+    if cursor_row < scroll_top:
+        scroll_top = cursor_row
+    if cursor_row >= scroll_top + editor_height:
+        scroll_top = cursor_row - editor_height + 1
+
+# ── file ops ─────────────────────────────────────────────────────────
+def open_file(path):
+    filename = path
+    buffer = []
+    modified = False
+    cursor_row = 0
+    cursor_col = 0
+    scroll_top = 0
+
+    let f = open(path, "r")
+    if f:
+        let content = f.read()
+        f.close()
+        if content != "":
+            let lines = content.split("\n")
+            let i = 0
+            while i < len(lines):
+                let line = lines[i]
+                if len(line) > 0 and line[len(line) - 1] == "\r":
+                    line = line[0:len(line) - 1]
+                buffer = buffer + [line]
+                i = i + 1
+        status_msg = "Opened: " + path
+    else:
+        buffer = [""]
+        status_msg = "New file: " + path
+
+def save_file():
+    if filename == "":
+        status_msg = "No filename! Use :w <name>"
+        return
+
+    let f = open(filename, "w")
+    if f:
+        let i = 0
+        while i < len(buffer):
+            if i > 0:
+                f.write("\n")
+            f.write(buffer[i])
+            i = i + 1
+        f.close()
+        modified = False
+        status_msg = "Saved: " + filename + " (" + str(len(buffer)) + " lines)"
+    else:
+        status_msg = "Error: cannot write to " + filename
+
+# ── insert char ──────────────────────────────────────────────────────
+def insert_char(ch):
+    let line = get_line(cursor_row)
+    let before = ""
+    let after = ""
+    let i = 0
+    while i < len(line):
+        if i < cursor_col:
+            before = before + line[i]
+        else:
+            after = after + line[i]
+        i = i + 1
+
+    if cursor_row < len(buffer):
+        buffer[cursor_row] = before + ch + after
+    else:
+        buffer = buffer + [ch]
+
+    cursor_col = cursor_col + 1
+    modified = True
+
+# ── insert newline ───────────────────────────────────────────────────
+def insert_newline():
+    let line = get_line(cursor_row)
+    let before = ""
+    let after = ""
+    let i = 0
+    while i < len(line):
+        if i < cursor_col:
+            before = before + line[i]
+        else:
+            after = after + line[i]
+        i = i + 1
+
+    # auto-indent
+    let indent = ""
+    let j = 0
+    while j < len(before):
+        let c = before[j]
+        if c == ' ' or c == '\t':
+            indent = indent + c
+            j = j + 1
+        else:
+            break
+
+    if cursor_row < len(buffer):
+        buffer[cursor_row] = before
+        let new_buffer = []
+        let k = 0
+        while k <= len(buffer):
+            if k < cursor_row + 1:
+                new_buffer = new_buffer + [buffer[k]]
+            elif k == cursor_row + 1:
+                new_buffer = new_buffer + [indent + after]
+            else:
+                new_buffer = new_buffer + [buffer[k - 1]]
+            k = k + 1
+        buffer = new_buffer
+    else:
+        buffer = buffer + [indent + after]
+
+    cursor_row = cursor_row + 1
+    cursor_col = len(indent)
+    modified = True
+
+# ── delete char before cursor ────────────────────────────────────────
+def delete_char_back():
+    if cursor_col > 0:
+        let line = get_line(cursor_row)
+        let before = ""
+        let after = ""
+        let i = 0
+        while i < len(line):
+            if i < cursor_col - 1:
+                before = before + line[i]
+            elif i >= cursor_col:
+                after = after + line[i]
+            i = i + 1
+        buffer[cursor_row] = before + after
+        cursor_col = cursor_col - 1
+    elif cursor_row > 0:
+        let prev = get_line(cursor_row - 1)
+        let curr = get_line(cursor_row)
+        let new_col = len(prev)
+        buffer[cursor_row - 1] = prev + curr
+        let new_buffer = []
+        let k = 0
+        while k < len(buffer):
+            if k != cursor_row:
+                new_buffer = new_buffer + [buffer[k]]
+            k = k + 1
+        buffer = new_buffer
+        cursor_row = cursor_row - 1
+        cursor_col = new_col
+    modified = True
+
+# ── delete char at cursor ────────────────────────────────────────────
+def delete_char_fwd():
+    let line = get_line(cursor_row)
+    if cursor_col < len(line):
+        let before = ""
+        let after = ""
+        let i = 0
+        while i < len(line):
+            if i < cursor_col:
+                before = before + line[i]
+            elif i > cursor_col:
+                after = after + line[i]
+            i = i + 1
+        buffer[cursor_row] = before + after
+        modified = True
+    elif cursor_row < count_lines() - 1:
+        let curr = get_line(cursor_row)
+        let nxt = get_line(cursor_row + 1)
+        buffer[cursor_row] = curr + nxt
+        let new_buffer = []
+        let k = 0
+        while k < len(buffer):
+            if k != cursor_row + 1:
+                new_buffer = new_buffer + [buffer[k]]
+            k = k + 1
+        buffer = new_buffer
+        modified = True
+
+# ── execute command ──────────────────────────────────────────────────
+def execute_command(cmd):
+    if cmd == "q" or cmd == "quit":
+        if modified:
+            status_msg = "File modified! Use :q!"
+        else:
+            return "quit"
+    elif cmd == "q!":
+        return "quit"
+    elif cmd == "w":
+        save_file()
+    elif cmd == "wq":
+        save_file()
+        return "quit"
+    elif cmd == "x":
+        save_file()
+        return "quit"
+    elif len(cmd) > 2 and cmd[0] == 'w' and cmd[1] == ' ':
+        let path = ""
+        let j = 2
+        while j < len(cmd):
+            path = path + cmd[j]
+            j = j + 1
+        filename = path
+        save_file()
+    elif len(cmd) > 2 and cmd[0] == 'o' and cmd[1] == ' ':
+        let path = ""
+        let j = 2
+        while j < len(cmd):
+            path = path + cmd[j]
+            j = j + 1
+        open_file(path)
+    elif len(cmd) > 2 and cmd[0] == 'e' and cmd[1] == ' ':
+        let path = ""
+        let j = 2
+        while j < len(cmd):
+            path = path + cmd[j]
+            j = j + 1
+        open_file(path)
+    elif cmd == "new":
+        buffer = [""]
+        filename = ""
+        cursor_row = 0
+        cursor_col = 0
+        scroll_top = 0
+        modified = False
+        status_msg = "New buffer"
+    elif cmd == "help":
+        status_msg = ":q quit :w save :o open :new empty :wq save+quit"
+    else:
+        status_msg = "Unknown: " + cmd
+    return "ok"
+
+# ── ensure valid state ───────────────────────────────────────────────
+def ensure_buffer():
+    if len(buffer) == 0:
+        buffer = [""]
+    if cursor_row >= len(buffer):
+        cursor_row = len(buffer) - 1
+    if cursor_row < 0:
+        cursor_row = 0
+    let line = get_line(cursor_row)
+    if cursor_col > len(line):
+        cursor_col = len(line)
+    if cursor_col < 0:
+        cursor_col = 0
+
+# ── main ─────────────────────────────────────────────────────────────
+def main(argv):
+    term_init()
+
+    if len(argv) > 0:
+        open_file(argv[0])
+    else:
+        buffer = ["# Welcome to Externum IDE"]
+        buffer = buffer + ["# Press 'i' to insert, ':' for commands"]
+        buffer = buffer + ["# ESC to return to normal mode"]
+        buffer = buffer + [""]
+
+    ensure_buffer()
+    gutter_width = calc_gutter()
+    mode = "normal"
+    status_msg = "Ready"
+
+    let running = True
+    while running:
+        ensure_buffer()
+        ensure_visible()
+        render()
+
+        let key = term_getkey()
+
+        if mode == "normal":
+            if key == ord('i'):
+                mode = "insert"
+                status_msg = "-- INSERT --"
+            elif key == ord(':'):
+                mode = "command"
+                command_buffer = ""
+                status_msg = ":"
+            elif key == ord('q'):
+                if not modified:
+                    running = False
+                else:
+                    status_msg = "Modified! Use :q!"
+            elif key == ord('Q'):
+                running = False
+            elif key == ord('j') or key == KEY_DOWN:
+                cursor_row = cursor_row + 1
+                let last = count_lines() - 1
+                if cursor_row > last:
+                    cursor_row = last
+            elif key == ord('k') or key == KEY_UP:
+                cursor_row = cursor_row - 1
+                if cursor_row < 0:
+                    cursor_row = 0
+            elif key == ord('h') or key == KEY_LEFT:
+                cursor_col = cursor_col - 1
+                if cursor_col < 0:
+                    cursor_col = 0
+            elif key == ord('l') or key == KEY_RIGHT:
+                let line = get_line(cursor_row)
+                if cursor_col < len(line):
+                    cursor_col = cursor_col + 1
+            elif key == ord('w'):
+                let line = get_line(cursor_row)
+                let j = cursor_col
+                while j < len(line):
+                    let c = line[j]
+                    if (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_':
+                        j = j + 1
+                    else:
+                        break
+                while j < len(line):
+                    let c = line[j]
+                    if c == ' ' or c == '\t':
+                        j = j + 1
+                    else:
+                        break
+                if j < len(line):
+                    cursor_col = j
+            elif key == ord('b'):
+                let line = get_line(cursor_row)
+                let j = cursor_col - 1
+                if j >= 0:
+                    while j >= 0:
+                        let c = line[j]
+                        if c == ' ' or c == '\t':
+                            j = j - 1
+                        else:
+                            break
+                    while j >= 0:
+                        let c = line[j]
+                        if (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or (c >= '0' and c <= '9') or c == '_':
+                            j = j - 1
+                        else:
+                            break
+                    cursor_col = j + 1
+                elif cursor_row > 0:
+                    cursor_row = cursor_row - 1
+                    cursor_col = len(get_line(cursor_row))
+            elif key == ord('0'):
+                cursor_col = 0
+            elif key == ord('$'):
+                cursor_col = len(get_line(cursor_row))
+            elif key == ord('x'):
+                delete_char_fwd()
+            elif key == ord('o'):
+                let new_buffer = []
+                let k = 0
+                while k < len(buffer):
+                    new_buffer = new_buffer + [buffer[k]]
+                    if k == cursor_row:
+                        new_buffer = new_buffer + [""]
+                    k = k + 1
+                if cursor_row >= len(buffer) - 1:
+                    new_buffer = new_buffer + [""]
+                buffer = new_buffer
+                cursor_row = cursor_row + 1
+                cursor_col = 0
+                mode = "insert"
+                modified = True
+            elif key == ord('O'):
+                let new_buffer = []
+                let k = 0
+                while k < len(buffer):
+                    if k == cursor_row:
+                        new_buffer = new_buffer + [""]
+                    new_buffer = new_buffer + [buffer[k]]
+                    k = k + 1
+                buffer = new_buffer
+                cursor_col = 0
+                mode = "insert"
+                modified = True
+            elif key == ord('G'):
+                cursor_row = count_lines() - 1
+                cursor_col = 0
+            elif key == ord('g'):
+                let key2 = term_getkey()
+                if key2 == ord('g'):
+                    cursor_row = 0
+                    cursor_col = 0
+            elif key == KEY_HOME:
+                cursor_col = 0
+            elif key == KEY_END:
+                cursor_col = len(get_line(cursor_row))
+            elif key == KEY_PGDOWN:
+                cursor_row = cursor_row + editor_height
+                let last = count_lines() - 1
+                if cursor_row > last:
+                    cursor_row = last
+            elif key == KEY_PGUP:
+                cursor_row = cursor_row - editor_height
+                if cursor_row < 0:
+                    cursor_row = 0
+            elif key == ord('r'):
+                let key2 = term_getkey()
+                let line = get_line(cursor_row)
+                let before = ""
+                let after = ""
+                let ci = 0
+                while ci < len(line):
+                    if ci < cursor_col:
+                        before = before + line[ci]
+                    elif ci > cursor_col:
+                        after = after + line[ci]
+                    ci = ci + 1
+                buffer[cursor_row] = before + chr(key2) + after
+                modified = True
+            elif key == ord('d'):
+                let key2 = term_getkey()
+                if key2 == ord('d'):
+                    if count_lines() > 1:
+                        let new_buffer = []
+                        let k = 0
+                        while k < len(buffer):
+                            if k != cursor_row:
+                                new_buffer = new_buffer + [buffer[k]]
+                            k = k + 1
+                        buffer = new_buffer
+                        let last = count_lines() - 1
+                        if cursor_row > last:
+                            cursor_row = last
+                        cursor_col = 0
+                        modified = True
+                        status_msg = "Line deleted"
+
+        elif mode == "insert":
+            if key == KEY_ESCAPE:
+                mode = "normal"
+                if cursor_col > 0:
+                    cursor_col = cursor_col - 1
+                status_msg = ""
+            elif key == KEY_ENTER:
+                insert_newline()
+                status_msg = ""
+            elif key == KEY_BACKSPACE:
+                delete_char_back()
+                status_msg = ""
+            elif key == KEY_DELETE:
+                delete_char_fwd()
+                status_msg = ""
+            elif key == KEY_LEFT:
+                cursor_col = cursor_col - 1
+                if cursor_col < 0:
+                    cursor_row = cursor_row - 1
+                    if cursor_row >= 0:
+                        cursor_col = len(get_line(cursor_row))
+                    else:
+                        cursor_row = 0
+                        cursor_col = 0
+            elif key == KEY_RIGHT:
+                let line = get_line(cursor_row)
+                if cursor_col < len(line):
+                    cursor_col = cursor_col + 1
+                else:
+                    cursor_row = cursor_row + 1
+                    cursor_col = 0
+            elif key == KEY_UP:
+                cursor_row = cursor_row - 1
+                if cursor_row < 0:
+                    cursor_row = 0
+                let line = get_line(cursor_row)
+                if cursor_col > len(line):
+                    cursor_col = len(line)
+            elif key == KEY_DOWN:
+                cursor_row = cursor_row + 1
+                let last = count_lines() - 1
+                if cursor_row > last:
+                    cursor_row = last
+                let line = get_line(cursor_row)
+                if cursor_col > len(line):
+                    cursor_col = len(line)
+            elif key == KEY_HOME:
+                cursor_col = 0
+            elif key == KEY_END:
+                cursor_col = len(get_line(cursor_row))
+            elif key == KEY_TAB:
+                insert_char(' ')
+                insert_char(' ')
+                insert_char(' ')
+                insert_char(' ')
+            elif key >= 32 and key < 127:
+                insert_char(chr(key))
+                status_msg = ""
+
+        elif mode == "command":
+            if key == KEY_ESCAPE:
+                mode = "normal"
+                status_msg = ""
+            elif key == KEY_ENTER:
+                let cmd = command_buffer
+                mode = "normal"
+                let result = execute_command(cmd)
+                if result == "quit":
+                    running = False
+                command_buffer = ""
+            elif key == KEY_BACKSPACE:
+                if len(command_buffer) > 0:
+                    command_buffer = command_buffer[0:len(command_buffer) - 1]
+                else:
+                    mode = "normal"
+                    status_msg = ""
+                status_msg = ": " + command_buffer
+            elif key >= 32 and key < 127:
+                command_buffer = command_buffer + chr(key)
+                status_msg = ": " + command_buffer
+
+    term_cleanup()
+    if modified:
+        print("Buffer modified. Changes not saved.")
+    return 0
+
+# ── entry point ──
+main(argv)

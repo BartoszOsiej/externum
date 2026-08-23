@@ -157,10 +157,10 @@ externum program.ext --target python|bash|binary|all
 externum program.ext -o out.py
 externum --version                   # Externum 3.0.0
 
-# NV2.0 — hard mode
+# hard mode
 externum run program.ext --hard
 
-# NV2.0 — DRM
+# DRM
 externum compile program.ext --protect --app-id X --author Y --secret S
 externum keygen --app-id X --author Y --secret S    # issue a license key
 ```
@@ -185,7 +185,7 @@ source (.ext) → Lexer → tokens → Parser → AST → Compiler → python/ba
 
 `python3 -m unittest discover -s tests` — **192 tests** covering lexer,
 parser, compiler and runtime (classes, exceptions, imports, lambdas,
-comprehensions, generators, stdlib, REPL), plus the NV2.0 suites:
+comprehensions, generators, stdlib, REPL), plus the suites:
 `tests/test_drm.py` (license keys, watermark, tamper-detection,
 obfuscation, runtime guard, unified key format, `drm.ext`, `keygen.ext`,
 `egs_manifest.ext`, CLI) and the stdlib suites (`jsonx`, `net`).
@@ -194,7 +194,7 @@ obfuscation, runtime guard, unified key format, `drm.ext`, `keygen.ext`,
 
 MIT License — see LICENSE file for details.
 
-## NV2.0 — Hard Mode (`externum run --hard` / `compile --hard`)
+## Hard Mode (`externum run --hard` / `compile --hard`)
 
 The hardcore ruleset turns Externum into a genuinely difficult language:
 
@@ -224,7 +224,7 @@ print(@p)     # 42
 free(p)       # double-free or @p after this line = compile error
 ```
 
-## NV2.0 — DRM (`externum compile --protect`)
+## DRM (`externum compile --protect`)
 
 `--protect` wraps every output with the full stack (`externum/drm.py`):
 

@@ -1,25 +1,33 @@
 """
 Externum - The First LLM-Native Programming Language
 ======================================================
-Externum v3 is a complete programming language that fuses:
-- Python readability + dynamic typing
-- Binary performance + SIMD vectorization
-- Bash system control + process orchestration
+Externum v4 is a complete, self-hosted programming language that fuses:
+- Strict static typing with algebraic data types (Result, Option, enums)
+- Ownership + borrow checking (Rust-style)
+- Effect tracking in types
+- Generics with trait bounds
+- Bytecode compiler + stack-based VM (no Python transpilation needed)
+- Pipe operator, async/await, defer, comptime, macros
+- Bash integration + system control
 
-One source compiles to Python, Bash and binary targets, or runs directly
-(``externum run``), with a REPL, a module system and a standard library
-written in the language itself.
-
-Roadmap modules (llm, neural, distributed, types, spec, debug) keep their
-reserved API surface below; the package stays fully importable without them.
+One source compiles to EXBC bytecode and runs on the Externum VM,
+or can still be transpiled to Python for compatibility.
 """
 
-__version__ = "3.0.0"
-__codename__ = "Sentient"
+__version__ = "4.0.0"
+__codename__ = "Abyss"
 
 from .lexer import Lexer
 from .parser import Parser
 from .compiler import Compiler
+from .bytecode import BytecodeCompiler, BytecodeModule, BytecodeFunction
+from .vm import VM, ExternumError, ExternumObject
+from .vm import (
+    ExternumStruct, ExternumEnum, ExternumResult, ExternumOption,
+    ExternumClosure, ExternumClass, ExternumInstance,
+)
+from .typesys import TypeChecker, ExternumTypeError
+from .analysis import preprocess, check, check_or_raise
 
 try:
     from .runtime import Runtime
@@ -34,48 +42,20 @@ def _guarded(name):
         return None
 
 
-_llm = _guarded("llm")
-_neural = _guarded("neural")
-_distributed = _guarded("distributed")
-_types = _guarded("types")
-_spec = _guarded("spec")
-_debug = _guarded("debug")
-
-LLMClient = getattr(_llm, "LLMClient", None)
-PromptTemplate = getattr(_llm, "PromptTemplate", None)
-FunctionSchema = getattr(_llm, "FunctionSchema", None)
-
-Tensor = getattr(_neural, "Tensor", None)
-Module = getattr(_neural, "Module", None)
-Linear = getattr(_neural, "Linear", None)
-Conv2d = getattr(_neural, "Conv2d", None)
-Attention = getattr(_neural, "Attention", None)
-Autograd = getattr(_neural, "Autograd", None)
-
-Actor = getattr(_distributed, "Actor", None)
-Cluster = getattr(_distributed, "Cluster", None)
-Stream = getattr(_distributed, "Stream", None)
-Channel = getattr(_distributed, "Channel", None)
-
-Type = getattr(_types, "Type", None)
-DependentType = getattr(_types, "DependentType", None)
-RefinementType = getattr(_types, "RefinementType", None)
-EffectType = getattr(_types, "EffectType", None)
-
-Spec = getattr(_spec, "Spec", None)
-Theorem = getattr(_spec, "Theorem", None)
-Proof = getattr(_spec, "Proof", None)
-Verify = getattr(_spec, "Verify", None)
-
-TimeTravelDebugger = getattr(_debug, "TimeTravelDebugger", None)
-HotReloader = getattr(_debug, "HotReloader", None)
-
 __all__ = [
-    "Lexer", "Parser", "Compiler", "Runtime",
-    "LLMClient", "PromptTemplate", "FunctionSchema",
-    "Tensor", "Module", "Linear", "Conv2d", "Attention", "Autograd",
-    "Actor", "Cluster", "Stream", "Channel",
-    "Type", "DependentType", "RefinementType", "EffectType",
-    "Spec", "Theorem", "Proof", "Verify",
-    "TimeTravelDebugger", "HotReloader",
+    # Core compiler pipeline
+    "Lexer", "Parser", "Compiler",
+    # v4 bytecode + VM
+    "BytecodeCompiler", "BytecodeModule", "BytecodeFunction",
+    "VM", "ExternumError",
+    # v4 algebraic types
+    "ExternumObject", "ExternumStruct", "ExternumEnum",
+    "ExternumResult", "ExternumOption",
+    "ExternumClosure", "ExternumClass", "ExternumInstance",
+    # Type system
+    "TypeChecker", "ExternumTypeError",
+    # Static analysis
+    "preprocess", "check", "check_or_raise",
+    # Legacy runtime
+    "Runtime",
 ]

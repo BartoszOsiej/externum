@@ -34,7 +34,8 @@ class ExternumTypeError(Exception):
     """Raised when the static checker rejects a program."""
 
 
-_KNOWN_BASE = {'Int', 'Float', 'Str', 'Bool', 'Void', 'Any', 'Ptr'}
+_KNOWN_BASE = {'Int', 'Float', 'Str', 'Bool', 'Void', 'Any', 'Ptr',
+                'Result', 'Option', 'Some', 'None', 'Ok', 'Err'}
 _BUILTIN_RETURNS = {
     'len': 'Int', 'str': 'Str', 'int': 'Int', 'float': 'Float', 'bool': 'Bool',
     'abs': 'Any', 'sum': 'Any', 'min': 'Any', 'max': 'Any', 'round': 'Int',
@@ -42,6 +43,16 @@ _BUILTIN_RETURNS = {
     'bin': 'Str', 'repr': 'Str', 'sizeof': 'Int',
     'alloc': 'Ptr', 'addr': 'Ptr', 'recv': 'Any', 'chan': 'Any',
     'copy': 'Any', 'list': 'List',
+    
+    'panic': 'Void', 'unreachable': 'Void', 'todo': 'Void',
+    'assert_eq': 'Bool', 'assert_ne': 'Bool',
+    'dbg': 'Any', 'trace': 'Void',
+    'Ok': 'Result', 'Err': 'Result', 'Some': 'Option',
+    'sorted': 'List', 'enumerate': 'Any', 'zip': 'Any',
+    'reversed': 'Any', 'min': 'Any', 'max': 'Any', 'sum': 'Any',
+    'abs': 'Any', 'round': 'Int', 'chr': 'Str', 'ord': 'Int',
+    'hex': 'Str', 'oct': 'Str', 'bin': 'Str',
+    'isinstance': 'Bool', 'hash': 'Int',
 }
 
 # Copy types are cheap to duplicate; moving them would be noise. Everything
@@ -158,6 +169,23 @@ class TypeChecker:
                 seen.add(mname)
                 if ret and _base_of(ret) not in _KNOWN_BASE | {'List', 'Dict', 'Optional'}:
                     self._err(f'trait `{tname}` method `{mname}` has unknown return type `{ret}`')
+
+    def _check_struct(self, node: ASTNode):
+        """Validate struct definition — fields must have known types."""
+        for child in node.children:
+            if child.type == 'FIELD' and child.children:
+                field_type = child.children[0].value if child.children[0].type == 'TYPE' else None
+                if field_type and field_type not in _KNOWN_BASE | {'List', 'Dict', 'Optional', 'Ptr'}:
+                    if not self.traits.get(field_type):
+                        pass  # Allow user-defined types
+
+    def _check_enum(self, node: ASTNode):
+        """Validate enum definition — variant types must be known."""
+        for child in node.children:
+            if child.type == 'VARIANT' and child.children:
+                data_type = child.children[0].value if child.children[0].type == 'TYPE' else None
+                if data_type and data_type not in _KNOWN_BASE | {'List', 'Dict', 'Optional', 'Ptr'}:
+                    pass  # Allow user-defined types
 
     def _check_impls(self):
         for (tname, cname), methods in self.impls.items():
@@ -298,6 +326,35 @@ class TypeChecker:
                    'OP', 'BREAK', 'CONTINUE', 'PASS',
                    'BASH_BLOCK', 'BASH_COMMAND', 'WITH'):
             pass  # no local checks
+        
+        elif t == 'STRUCT':
+            self._check_struct(node)
+        elif t == 'ENUM':
+            self._check_enum(node)
+        elif t == 'MOD':
+            self._enter_scope()
+            self._check_nodes(node.children)
+            self._exit_scope()
+        elif t == 'CONST':
+            if node.children:
+                self._check_expr(node.children[0])
+                self._declare(node.value, self._infer(node.children[0]), 0)
+        elif t == 'STATIC':
+            if node.children:
+                for child in node.children:
+                    if child.type != 'TYPE':
+                        self._check_expr(child)
+            self._declare(node.value, 'Any', 0, mutable=True)
+        elif t == 'LOOP':
+            self._enter_scope()
+            self._check_nodes(node.children)
+            self._exit_scope()
+        elif t == 'DEFER':
+            self._enter_scope()
+            self._check_nodes(node.children)
+            self._exit_scope()
+        elif t == 'TYPE_ALIAS':
+            pass  # compile-time only
         else:
             # statements with expression children — walk generically
             for child in node.children:

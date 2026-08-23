@@ -77,7 +77,7 @@ nums = [f for f in fibonacci(10) if f % 2 == 0]
 externum run examples/pokedex.ext
 ```
 
-## NV2.0 — Hard Mode (`--hard`) — giga trudny
+## Hard Mode (`--hard`) — giga trudny
 
 Uruchom dowolny program przez `externum run program.ext --hard` (albo
 `compile … --hard`), by włączyć hardcore'owy ruleset. Istniejące programy,
@@ -104,7 +104,7 @@ które go łamią, zawodzą głośno:
 externum run examples/hardcore.ext --hard
 ```
 
-## NV2.0 — DRM (`--protect`) — obfuskacja, watermark, licencja
+## DRM (`--protect`) — obfuskacja, watermark, licencja
 
 Każdy chroniony build niesie pełny stack defense-in-depth:
 
@@ -138,13 +138,13 @@ externum/
 ├── lexer.py          # Tokenizacja (bracket-aware, bash, f-stringi)
 ├── parser.py         # Pełna gramatyka → AST
 ├── compiler.py       # Codegen → Python / Bash / binary
-├── typesys.py        # NV2.0 type checker (hard mode: typy statyczne, ownership)
-├── hardmode.py       # NV2.0 makra + pipeline hard mode
-├── drm.py            # NV2.0 DRM: klucze licencyjne, watermark, tamper-detection, obfuskacja
+├── typesys.py        # type checker (hard mode: typy statyczne, ownership)
+├── hardmode.py       # makra + pipeline hard mode
+├── drm.py            # DRM: klucze licencyjne, watermark, tamper-detection, obfuskacja
 ├── runtime/          # Runtime: exec, import .ext, REPL (+ rtlib.py: pamięć/współbieżność)
 └── __main__.py       # CLI (run / repl / compile / keygen)
 lib/                  # Standardowa biblioteka (.ext) — w tym drm.ext
-lib/drm.ext           # NV2.0 DRM stdlib: sign / verify / watermark w Externum
+lib/drm.ext           # DRM stdlib: sign / verify / watermark w Externum
 examples/             # hello, calc, pokedex, hardcore.ext
 tests/                # 167 testów jednostkowych
 WIKI.md               # Specyfikacja języka

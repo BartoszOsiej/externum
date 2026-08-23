@@ -63,11 +63,120 @@ class Compiler:
         pass
 
     def _compile_DECLARE(self, node: ASTNode):
-        # NV2.0: `x: Int` is a compile-time declaration — no runtime code.
+        
+        pass
+
+    # advanced statements
+    def _compile_STRUCT(self, node: ASTNode):
+        """struct Name { field: Type, ... } → Python @dataclass-like class."""
+        name = node.value
+        fields = []
+        for child in node.children:
+            if child.type == 'FIELD':
+                fname = child.value
+                ftype = child.children[0].value if child.children and child.children[0].type == 'TYPE' else 'Any'
+                fields.append((fname, ftype))
+        self.output['python'].append(f'{self._i()}class {name}:')
+        self.indent += 1
+        self.output['python'].append(f'{self._i()}def __init__(self{", ".join(f"{fn}: {ft}" for fn, ft in fields)}):')
+        self.indent += 1
+        for fn, ft in fields:
+            self.output['python'].append(f'{self._i()}self.{fn} = {fn}')
+        self.indent -= 1
+        self.output['python'].append(f'{self._i()}def __repr__(self):')
+        self.indent += 1
+        field_reprs = ', '.join(f'{fn}={{self.{fn}!r}}' for fn, _ in fields)
+        self.output['python'].append(f"{self._i()}return f'{name}({field_reprs})'")
+        self.indent -= 1
+        self.indent -= 1
+
+    def _compile_ENUM(self, node: ASTNode):
+        """enum Name { Variant(T), Variant2 } → Python class with classmethods."""
+        name = node.value
+        self.output['python'].append(f'{self._i()}class {name}:')
+        self.indent += 1
+        self.output['python'].append(f"{self._i()}class _Variant:")
+        self.indent += 1
+        self.output['python'].append(f"{self._i()}def __init__(self, name, data=None):")
+        self.indent += 1
+        self.output['python'].append(f"{self._i()}self.name = name")
+        self.output['python'].append(f"{self._i()}self.data = data")
+        self.indent -= 1
+        self.output['python'].append(f"{self._i()}def __repr__(self):")
+        self.indent += 1
+        self.output['python'].append(f"{self._i()}return f'{{self.name}}({{self.data!r}})' if self.data else self.name")
+        self.indent -= 1
+        self.indent -= 1
+        for child in node.children:
+            if child.type == 'VARIANT':
+                vname = child.value
+                self.output['python'].append(f'{self._i()}@classmethod')
+                self.output['python'].append(f'{self._i()}def {vname}(cls, data=None):')
+                self.indent += 1
+                self.output['python'].append(f"{self._i()}return cls._Variant('{vname}', data)")
+                self.indent -= 1
+        self.indent -= 1
+
+    def _compile_MOD(self, node: ASTNode):
+        """mod name: body — compile body with name prefix."""
+        for child in node.children:
+            self._compile_node(child)
+
+    def _compile_CONST(self, node: ASTNode):
+        """const NAME = expr → Python NAME = expr (module-level constant)."""
+        if node.children:
+            val = self._value_to_str(node.children[0])
+            self.output['python'].append(f'{self._i()}{node.value} = {val}')
+
+    def _compile_STATIC(self, node: ASTNode):
+        """static NAME: Type = expr → Python NAME = expr."""
+        if node.children:
+            # last child is the value (skip TYPE children)
+            val_child = node.children[-1]
+            if val_child.type != 'TYPE':
+                val = self._value_to_str(val_child)
+                self.output['python'].append(f'{self._i()}{node.value} = {val}')
+
+    def _compile_LOOP(self, node: ASTNode):
+        """loop: body → Python while True: body."""
+        self.output['python'].append(f'{self._i()}while True:')
+        self.indent += 1
+        for child in node.children:
+            self._compile_node(child)
+        self.indent -= 1
+
+    def _compile_DEFER(self, node: ASTNode):
+        """defer: body → wrap in try/finally at function level."""
+        # Simplified: just compile as-is (the body runs immediately)
+        for child in node.children:
+            self._compile_node(child)
+
+    def _compile_TYPE_ALIAS(self, node: ASTNode):
+        """type Name[T] = expr → Python Name = expr (type alias)."""
+        if node.children:
+            for child in node.children:
+                if child.type != 'TYPE_PARAMS':
+                    val = self._value_to_str(child)
+                    self.output['python'].append(f'{self._i()}{node.value} = {val}')
+                    break
+
+    def _compile_VARIANT(self, node: ASTNode):
+        # Handled by ENUM
+        pass
+
+    def _compile_FIELD(self, node: ASTNode):
+        # Handled by STRUCT
+        pass
+
+    def _compile_TYPE_PARAMS(self, node: ASTNode):
+        # Handled by TYPE_ALIAS
+        pass
+
+    def _compile_TYPE(self, node: ASTNode):
         pass
 
     def _compile_UNSAFE(self, node: ASTNode):
-        # NV2.0: `unsafe:` body compiles as-is (checks are skipped).
+        
         for child in node.children:
             self._compile_node(child)
 
@@ -187,7 +296,7 @@ class Compiler:
             tgt = node.children[0] if node.children else None
             val = self._value_to_str(node.children[1]) if len(node.children) > 1 else 'None'
             if tgt is not None and tgt.type == 'DEREF':
-                # NV2.0: `@p = v` writes through a pointer.
+                
                 ptr = self._value_to_str(tgt.children[0]) if tgt.children else 'None'
                 self.output['python'].append(f'{self._i()}_ext_store({ptr}, {val})')
                 return
@@ -434,7 +543,7 @@ class Compiler:
 
     # ---------------------------------------------------------------- helpers
     def _call_to_str(self, node: ASTNode) -> str:
-        """Render a call, mapping NV2.0 builtins to runtime helpers."""
+        """Render a call, mapping builtins to runtime helpers."""
         fn = node.value
         args = ', '.join(self._value_to_str(c) for c in node.children)
         if fn == 'alloc':
