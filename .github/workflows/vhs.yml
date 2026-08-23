@@ -19,6 +19,8 @@ jobs:
 
       - name: Install VHS
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
           curl -sLO https://github.com/charmbracelet/vhs/releases/download/v0.11.0/vhs_0.11.0_Linux_x86_64.tar.gz
           tar xzf vhs_linux_amd64.tar.gz
           sudo mv vhs /usr/local/bin/
