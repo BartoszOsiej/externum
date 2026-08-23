@@ -92,37 +92,7 @@ jobs:
         run: python3 -m unittest tests.test_v4 -v
       - name: Run bytecode compiler tests
         run: |
-          python3 -c "
-          from externum.lexer import Lexer
-          from externum.parser import Parser
-          from externum.bytecode import BytecodeCompiler
-          from externum.vm import VM
-          import io
-
-          tests = {
-              'arithmetic': 'print(2 + 3 * 4)',
-              'ternary': 'print(\"yes\" if True else \"no\")',
-              'function': 'def add(a, b):\n    return a + b\nprint(add(2, 3))',
-              'class': 'class Dog:\\n    def __init__(self, n):\\n        self.name = n\\n    def speak(self):\\n        return self.name\\nprint(Dog(\"Rex\").speak())',
-              'closure': 'def make(n):\\n    return lambda x: x + n\\nprint(make(10)(5))',
-              'loop': 'i = 0\\nwhile i < 5:\\n    i = i + 1\\nprint(i)',
-              'list': 'print([1, 2, 3][1])',
-              'import': 'import os\\nprint(\"import ok\")',
-          }
-          for name, code in tests.items():
-              tokens = Lexer(code).tokenize()
-              ast = list(Parser(tokens).parse())
-              compiler = BytecodeCompiler(ast)
-              module = compiler.compile()
-              vm = VM()
-              buf = io.StringIO()
-              vm._stdout = buf
-              vm.run_module(module)
-              result = buf.getvalue().strip()
-              assert result, f'{name}: empty output'
-              print(f'  ✓ {name}: {result[:40]}')
-          print('All VM tests passed!')
-          "
+          python3 tests/test_vm_bytecode.py
 
   # ── Stage 5: Self-Hosted Compiler Tests ────────────────────────────
   self-hosted:
