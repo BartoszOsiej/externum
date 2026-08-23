@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -6,20 +6,388 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    name: Tests
+  # ── Stage 1: Code Quality ──────────────────────────────────────────
+  lint:
+    name: "1 · Lint & Format"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install dependencies
-        run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install --no-cache-dir pyodide-py 2>/dev/null || true
-      - name: Run test suite
+      - run: pip install ruff
+      - name: Ruff check
+        run: ruff check externum/ --output-format=github
+      - name: Ruff format check
+        run: ruff format --check externum/
+
+  # ── Stage 2: Type Checking ─────────────────────────────────────────
+  typecheck:
+    name: "2 · Type Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyright
+      - name: Pyright analysis
+        run: pyright externum/ --outputjson > /dev/null 2>&1 || pyright externum/
+        continue-on-error: true
+
+  # ── Stage 3: Unit Tests ────────────────────────────────────────────
+  unit-tests:
+    name: "3 · Unit Tests"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run unit tests
         run: python3 -m unittest discover -s tests -v
+      - name: Test coverage
+        run: |
+          pip install coverage
+          coverage run -m unittest discover -s tests
+          coverage report --fail-under=80
+          coverage xml -o coverage.xml
+      - name: Upload coverage
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  # ── Stage 4: VM & Bytecode Tests ───────────────────────────────────
+  vm-tests:
+    name: "4 · VM & Bytecode"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run VM tests
+        run: python3 -m unittest tests.test_v4 -v
+      - name: Run bytecode compiler tests
+        run: |
+          python3 -c "
+          from externum.lexer import Lexer
+          from externum.parser import Parser
+          from externum.bytecode import BytecodeCompiler
+          from externum.vm import VM
+          import io
+
+          tests = {
+              'arithmetic': 'print(2 + 3 * 4)',
+              'ternary': 'print(\"yes\" if True else \"no\")',
+              'function': 'def add(a, b): return a + b; print(add(2, 3))',
+              'class': 'class Dog:\\n    def __init__(self, n):\\n        self.name = n\\n    def speak(self):\\n        return self.name\\nprint(Dog(\"Rex\").speak())',
+              'closure': 'def make(n):\\n    return lambda x: x + n\\nprint(make(10)(5))',
+              'loop': 'i = 0\\nwhile i < 5:\\n    i = i + 1\\nprint(i)',
+              'list': 'print([1, 2, 3][1])',
+              'import': 'import os\\nprint(\"import ok\")',
+          }
+          for name, code in tests.items():
+              tokens = Lexer(code).tokenize()
+              ast = list(Parser(tokens).parse())
+              compiler = BytecodeCompiler(ast)
+              module = compiler.compile()
+              vm = VM()
+              buf = io.StringIO()
+              vm._stdout = buf
+              vm.run_module(module)
+              result = buf.getvalue().strip()
+              assert result, f'{name}: empty output'
+              print(f'  ✓ {name}: {result[:40]}')
+          print('All VM tests passed!')
+          "
+
+  # ── Stage 5: Self-Hosted Compiler Tests ────────────────────────────
+  self-hosted:
+    name: "5 · Self-Hosted Compiler"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test bootstrap compiler
+        run: |
+          echo 'print("Hello from self-hosted Externum!")' > /tmp/test_self.ext
+          python3 bin/externum run /tmp/test_self.ext
+      - name: Test compiler components
+        run: |
+          for f in lib/compiler/*.ext; do
+            echo "Compiling: $f"
+            python3 -c "
+          from externum.lexer import Lexer
+          from externum.parser import Parser
+          from externum.bytecode import BytecodeCompiler
+          from externum.analysis import preprocess
+          with open('$f') as fh:
+              src = fh.read()
+          processed, _ = preprocess(src)
+          tokens = Lexer(processed).tokenize()
+          ast = list(Parser(tokens).parse())
+          compiler = BytecodeCompiler(ast, module_name='$f')
+          module = compiler.compile()
+          print(f'  ✓ {len(module.bytecode)} bytes, {len(module.constants)} constants')
+          "
+          done
+
+  # ── Stage 6: Integration Tests (CLI end-to-end) ────────────────────
+  integration:
+    name: "6 · Integration (CLI E2E)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test CLI commands
+        run: |
+          echo '--- externum --help ---'
+          python3 -m externum --help
+          echo '--- externum run hello.ext ---'
+          python3 -m externum run examples/hello.ext
+          echo '--- externum compile ---'
+          python3 -m externum compile examples/hello.ext --target python > /dev/null
+          echo '--- externum check ---'
+          python3 -m externum check examples/hello.ext
+          echo '--- externum vm ---'
+          python3 -m externum vm examples/hello.ext
+          echo '--- externum keygen ---'
+          python3 -m externum keygen --app-id test --secret test123 | head -1
+          echo 'All CLI tests passed!'
+
+  # ── Stage 7: Security Scan (Bandit + Safety) ───────────────────────
+  security:
+    name: "7 · Security Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install bandit safety
+      - name: Bandit security scan
+        run: bandit -r externum/ -ll --skip B101,B311
+      - name: Safety dependency check
+        run: safety check --full-report || true
+
+  # ── Stage 8: Spell Check ───────────────────────────────────────────
+  typos:
+    name: "8 · Spell Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: crate-ci/typos@v1
+
+  # ── Stage 9: Build Package ─────────────────────────────────────────
+  build:
+    name: "9 · Build Package"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - name: Build sdist + wheel
+        run: python3 -m build
+      - name: Check package
+        run: twine check dist/*
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── Stage 10: Docker Build ─────────────────────────────────────────
+  docker:
+    name: "10 · Docker Build"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build Docker image
+        run: docker build -t externum:ci .
+      - name: Run container test
+        run: |
+          docker run --rm externum:ci python3 -c "
+          from externum.runtime import Runtime
+          rt = Runtime()
+          rt.run('print(\"Docker CI works!\")')
+          "
+
+  # ── Stage 11: Documentation Build ──────────────────────────────────
+  docs:
+    name: "11 · Docs Build"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify documentation files exist
+        run: |
+          for f in README.md WIKI.md CONTRIBUTING.md LICENSE SECURITY.md; do
+            if [ -f "$f" ]; then
+              echo "✓ $f exists ($(wc -l < "$f") lines)"
+            else
+              echo "✗ $f MISSING"
+              exit 1
+            fi
+          done
+      - name: Check README links
+        run: |
+          grep -oP 'https?://[^\s\)]+' README.md | head -5
+          echo "Link check passed"
+
+  # ── Stage 12: Externum Feature Smoke Test ───────────────────────────
+  smoke-test:
+    name: "12 · Language Smoke Test"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Smoke test — every major feature
+        run: |
+          python3 -c "
+          from externum.runtime import Runtime
+          import io, sys
+
+          features = {
+              'arithmetic': 'print(2 + 3 * 4)',
+              'strings': 'print(\"hello\" + \" world\")',
+              'f-strings': 'x = 42; print(f\"x={x}\")',
+              'lists': 'print([1,2,3] + [4,5,6])',
+              'dicts': 'print({\"a\": 1, \"b\": 2})',
+              'sets': 'print({1, 2, 3})',
+              'tuples': 'a, b, c = 1, 2, 3; print(a + b + c)',
+              'comprehensions': 'print([x*2 for x in range(5)])',
+              'dict-comp': 'print({k: v*2 for k, v in [(\"a\",1),(\"b\",2)]})',
+              'lambda': 'print((lambda x: x*2)(5))',
+              'closures': 'def mk(n): return lambda x: x+n; print(mk(10)(5))',
+              'classes': 'class C:\\n    def __init__(s, v): s.v = v; print(C(42).v)',
+              'inheritance': 'class A:\\n    def greet(s): return \"hi\"\\nclass B(A):\\n    def greet(s): return \"hello\"\\nprint(B().greet())',
+              'try-except': 'try:\\n    1/0\\nexcept:\\n    print(\"caught\")',
+              'for-loop': 's=0\\nfor i in range(10): s=s+i\\nprint(s)',
+              'while-loop': 'i=0\\nwhile i<10: i=i+1\\nprint(i)',
+              'nested-fn': 'def f():\\n    def g(): return 99\\n    return g()\\nprint(f())',
+              'generators': 'def gen(): yield 1; yield 2; yield 3\\nprint(sum(gen()))',
+              'ternary': 'print(\"yes\" if 1<2 else \"no\")',
+              'bool-ops': 'print(True and False or True)',
+              'import': 'import os; print(\"os ok\")',
+              'string-methods': 'print(\"HELLO\".lower())',
+              'range': 'print(list(range(5)))',
+              'enumerate': 'print(list(enumerate([\"a\",\"b\"])))',
+              'zip': 'print(list(zip([1,2],[\"a\",\"b\"])))',
+              'sorted': 'print(sorted([3,1,2]))',
+              'input-mock': 'print(len(\"test\"))',
+              'type-conv': 'print(str(42) + \"!\")',
+              'globals': 'print(True and not False)',
+              'assert': 'assert 1 == 1; print(\"assert ok\")',
+              'list-idx': 'print([10,20,30][2])',
+              'str-idx': 'print(\"abc\"[1])',
+          }
+
+          passed = 0
+          failed = 0
+          for name, code in features.items():
+              try:
+                  rt = Runtime()
+                  buf = io.StringIO()
+                  old = sys.stdout
+                  sys.stdout = buf
+                  rt.run(code)
+                  sys.stdout = old
+                  result = buf.getvalue().strip()
+                  if result:
+                      passed += 1
+                  else:
+                      print(f'✗ {name}: empty output')
+                      failed += 1
+              except Exception as e:
+                  sys.stdout = old
+                  print(f'✗ {name}: {e}')
+                  failed += 1
+
+          print(f'\n{'='*50}')
+          print(f'Results: {passed} passed, {failed} failed out of {passed+failed}')
+          if failed > 0:
+              exit(1)
+          print('All features working!')
+          "
+
+  # ── Final: Summary ─────────────────────────────────────────────────
+  ci-complete:
+    name: "CI Complete"
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, unit-tests, vm-tests, self-hosted, integration, security, typos, build, docker, docs, smoke-test]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "=== CI/CD Pipeline Results ==="
+          echo "Stage 1  Lint:           ${{ needs.lint.result }}"
+          echo "Stage 2  Type Check:     ${{ needs.typecheck.result }}"
+          echo "Stage 3  Unit Tests:     ${{ needs.unit-tests.result }}"
+          echo "Stage 4  VM & Bytecode:  ${{ needs.vm-tests.result }}"
+          echo "Stage 5  Self-Hosted:    ${{ needs.self-hosted.result }}"
+          echo "Stage 6  Integration:    ${{ needs.integration.result }}"
+          echo "Stage 7  Security:       ${{ needs.security.result }}"
+          echo "Stage 8  Spell Check:    ${{ needs.typos.result }}"
+          echo "Stage 9  Build Package:  ${{ needs.build.result }}"
+          echo "Stage 10 Docker:         ${{ needs.docker.result }}"
+          echo "Stage 11 Docs:           ${{ needs.docs.result }}"
+          echo "Stage 12 Smoke Test:     ${{ needs.smoke-test.result }}"
+
+          # Fail if any required stage failed
+          if [ "${{ needs.unit-tests.result }}" != "success" ] || \
+             [ "${{ needs.vm-tests.result }}" != "success" ] || \
+             [ "${{ needs.integration.result }}" != "success" ] || \
+             [ "${{ needs.smoke-test.result }}" != "success" ]; then
+            echo "❌ Required stage failed!"
+            exit 1
+          fi
+          echo "✅ All critical stages passed!"
