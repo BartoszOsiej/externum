@@ -23,7 +23,6 @@ import hashlib
 import hmac
 import re
 import time
-from typing import Optional
 
 
 class DrmError(Exception):
@@ -31,12 +30,11 @@ class DrmError(Exception):
 
 
 # ------------------------------------------------------------------- licenses
-def make_license(secret: str, app_id: str, author: str,
-                 expires: Optional[int] = None) -> str:
+def make_license(secret: str, app_id: str, author: str, expires: int | None = None) -> str:
     """Sign a license: `app_id:author:expires` + HMAC-SHA256 signature."""
-    payload = f'{app_id}:{author}:{expires or 0}'
+    payload = f"{app_id}:{author}:{expires or 0}"
     sig = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return base64.urlsafe_b64encode(f'{payload}:{sig}'.encode()).decode()
+    return base64.urlsafe_b64encode(f"{payload}:{sig}".encode()).decode()
 
 
 def verify_license(key: str, secret: str) -> bool:
@@ -45,16 +43,16 @@ def verify_license(key: str, secret: str) -> bool:
         decoded = base64.urlsafe_b64decode(key.encode()).decode()
     except Exception:
         return False
-    parts = decoded.split(':')
+    parts = decoded.split(":")
     if len(parts) < 4:
         return False
-    payload = ':'.join(parts[:-1])
+    payload = ":".join(parts[:-1])
     sig = parts[-1]
     expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
         return False
     try:
-        _, _, expires = payload.rsplit(':', 2)
+        _, _, expires = payload.rsplit(":", 2)
         exp = int(expires)
     except ValueError:
         return False
@@ -69,16 +67,14 @@ _PLAIN_STR = re.compile(r"(?<![\\\w])(?:'[^'\\\n]*'|\"[^\"\\\n]*\")")
 
 def _obfuscate_strings(code: str) -> str:
     """Encode plain double-quoted string literals through a base64 helper."""
-    helper = (
-        'def _ext_s(_b64):\n'
-        '    import base64\n'
-        '    return base64.b64decode(_b64).decode("utf-8")\n'
-    )
+    helper = 'def _ext_s(_b64):\n    import base64\n    return base64.b64decode(_b64).decode("utf-8")\n'
+
     def _replace(m):
         literal = m.group(0)
         inner = literal[1:-1]
         encoded = base64.b64encode(inner.encode()).decode()
         return f'_ext_s("{encoded}")'
+
     return helper + _PLAIN_STR.sub(_replace, code)
 
 
@@ -87,8 +83,9 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def protect_python(code: str, app_id: str, author: str, source: str,
-                   secret: str = 'externum-drm', build_id: str = None) -> str:
+def protect_python(
+    code: str, app_id: str, author: str, source: str, secret: str = "externum-drm", build_id: str = None
+) -> str:
     """Apply the full DRM stack to compiled Python output.
 
     `secret` is compile-time only — it signs the embedded license expected
@@ -96,7 +93,7 @@ def protect_python(code: str, app_id: str, author: str, source: str,
     *expected* HMAC digest, so a wrong key fails even though the secret is
     not present.
     """
-    build_id = build_id or f'{int(time.time())}'
+    build_id = build_id or f"{int(time.time())}"
     source_sha = _sha256(source.encode())
     obfuscated = _obfuscate_strings(code)
 
@@ -105,17 +102,17 @@ def protect_python(code: str, app_id: str, author: str, source: str,
     expected_sha = _sha256(expected_key.encode())
 
     header = (
-        '# ============================================================\n'
-        '# Externum :: protected build\n'
-        f'#   app_id : {app_id}\n'
-        f'#   author : {author}\n'
-        f'#   build  : {build_id}\n'
-        f'#   source : sha256:{source_sha}\n'
-        '#   This file is watermarked and integrity-checked. Do not edit.\n'
-        '# ============================================================\n'
+        "# ============================================================\n"
+        "# Externum :: protected build\n"
+        f"#   app_id : {app_id}\n"
+        f"#   author : {author}\n"
+        f"#   build  : {build_id}\n"
+        f"#   source : sha256:{source_sha}\n"
+        "#   This file is watermarked and integrity-checked. Do not edit.\n"
+        "# ============================================================\n"
     )
 
-    guard = f'''
+    guard = f"""
 # ---- Externum DRM runtime guard (embedded in every protected file) ----
 _EXT_DRM_APP = {app_id!r}
 _EXT_DRM_AUTHOR = {author!r}
@@ -177,7 +174,7 @@ def _ext_drm_self_check():
     return _EXT_DRM_WATERMARK
 
 _ext_drm_self_check()
-'''
+"""
 
     protected = header + obfuscated + guard
 
@@ -185,8 +182,8 @@ _ext_drm_self_check()
     # so a modified copy produces a different fingerprint.
     artifact_sha = _sha256(protected.encode())
     protected = protected.replace(
-        '_EXT_DRM_WATERMARK = \'Externum::DRM::\' + _EXT_DRM_APP + \'::\' + _EXT_DRM_AUTHOR',
-        '_EXT_DRM_WATERMARK = \'Externum::DRM::\' + _EXT_DRM_APP + \'::\' + _EXT_DRM_AUTHOR\n'
-        f'_EXT_DRM_ARTIFACT_SHA = {artifact_sha!r}',
+        "_EXT_DRM_WATERMARK = 'Externum::DRM::' + _EXT_DRM_APP + '::' + _EXT_DRM_AUTHOR",
+        "_EXT_DRM_WATERMARK = 'Externum::DRM::' + _EXT_DRM_APP + '::' + _EXT_DRM_AUTHOR\n"
+        f"_EXT_DRM_ARTIFACT_SHA = {artifact_sha!r}",
     )
     return protected

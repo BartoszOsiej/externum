@@ -17,17 +17,24 @@ or can still be transpiled to Python for compatibility.
 __version__ = "4.0.0"
 __codename__ = "Abyss"
 
+from .analysis import check, check_or_raise, preprocess
+from .bytecode import BytecodeCompiler, BytecodeFunction, BytecodeModule
+from .compiler import Compiler
 from .lexer import Lexer
 from .parser import Parser
-from .compiler import Compiler
-from .bytecode import BytecodeCompiler, BytecodeModule, BytecodeFunction
-from .vm import VM, ExternumError, ExternumObject
+from .typesys import ExternumTypeError, TypeChecker
 from .vm import (
-    ExternumStruct, ExternumEnum, ExternumResult, ExternumOption,
-    ExternumClosure, ExternumClass, ExternumInstance,
+    VM,
+    ExternumClass,
+    ExternumClosure,
+    ExternumEnum,
+    ExternumError,
+    ExternumInstance,
+    ExternumObject,
+    ExternumOption,
+    ExternumResult,
+    ExternumStruct,
 )
-from .typesys import TypeChecker, ExternumTypeError
-from .analysis import preprocess, check, check_or_raise
 
 try:
     from .runtime import Runtime
@@ -44,18 +51,31 @@ def _guarded(name):
 
 __all__ = [
     # Core compiler pipeline
-    "Lexer", "Parser", "Compiler",
+    "Lexer",
+    "Parser",
+    "Compiler",
     # v4 bytecode + VM
-    "BytecodeCompiler", "BytecodeModule", "BytecodeFunction",
-    "VM", "ExternumError",
+    "BytecodeCompiler",
+    "BytecodeModule",
+    "BytecodeFunction",
+    "VM",
+    "ExternumError",
     # v4 algebraic types
-    "ExternumObject", "ExternumStruct", "ExternumEnum",
-    "ExternumResult", "ExternumOption",
-    "ExternumClosure", "ExternumClass", "ExternumInstance",
+    "ExternumObject",
+    "ExternumStruct",
+    "ExternumEnum",
+    "ExternumResult",
+    "ExternumOption",
+    "ExternumClosure",
+    "ExternumClass",
+    "ExternumInstance",
     # Type system
-    "TypeChecker", "ExternumTypeError",
+    "TypeChecker",
+    "ExternumTypeError",
     # Static analysis
-    "preprocess", "check", "check_or_raise",
+    "preprocess",
+    "check",
+    "check_or_raise",
     # Legacy runtime
     "Runtime",
 ]
