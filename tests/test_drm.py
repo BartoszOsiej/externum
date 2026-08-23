@@ -315,7 +315,7 @@ class TestCliSmoke(unittest.TestCase):
         try:
             out3 = subprocess.run(
                 [sys.executable, '-m', 'externum', 'compile', bad_path,
-                 '--target', 'python'],
+                 '--target', 'python', '--hard'],
                 capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             )
         finally:

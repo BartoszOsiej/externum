@@ -53,6 +53,8 @@ Examples:
     comp.add_argument('--author', default=None, help='Author name for DRM')
     comp.add_argument('--secret', default=None, help='DRM signing secret (compile-time only)')
     comp.add_argument('--build-id', default=None, help='Build id baked into the DRM watermark')
+    comp.add_argument('--hard', action='store_true',
+                       help='Enable strict type checking (declarations, annotations, ownership)')
 
     key = sub.add_parser('keygen', help='Generate DRM license keys')
     key.add_argument('--app-id', required=True, help='Application id')
@@ -150,7 +152,8 @@ def cmd_compile(args) -> None:
                 'build_id': args.build_id,
             }
         rt = Runtime()
-        py = rt.compile_to_python(source, protect=protect)
+        check = getattr(args, 'hard', False)
+        py = rt.compile_to_python(source, protect=protect, check=check)
         if args.target == 'all':
             # DRM-protected Python plus the raw bash/binary targets
             tokens = Lexer(source).tokenize()

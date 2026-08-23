@@ -196,6 +196,22 @@ def compile_expr(cs, node):
     # binary operation
     if t == "BINOP":
         let op = node.value
+        # ternary: a if cond else b
+        if len(node.children) >= 4 and op == "if_else":
+            compile_expr(cs, node.children[2])  # condition
+            emit_u16(cs, OP_JUMP_IF_NOT, 0)
+            let jfalse = len(cs.bytecode) - 2
+            compile_expr(cs, node.children[0])  # true value
+            emit_u16(cs, OP_JUMP, 0)
+            let jend = len(cs.bytecode) - 2
+            # patch jfalse
+            cs.bytecode[jfalse] = (len(cs.bytecode) >> 8) & 0xFF
+            cs.bytecode[jfalse + 1] = len(cs.bytecode) & 0xFF
+            compile_expr(cs, node.children[3])  # false value
+            # patch jend
+            cs.bytecode[jend] = (len(cs.bytecode) >> 8) & 0xFF
+            cs.bytecode[jend + 1] = len(cs.bytecode) & 0xFF
+            return
         compile_expr(cs, node.children[0])
         compile_expr(cs, node.children[1])
 

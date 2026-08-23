@@ -849,12 +849,13 @@ class BytecodeCompiler:
         op_node = node.children[1] if len(node.children) > 1 else None
         op = op_node.value if op_node else '+'
         if op == 'if_else':
-            self._compile_expr(node.children[0])
+            # children: [true_value, OP, condition, false_value]
+            self._compile_expr(node.children[2])  # condition
             jfalse = self._emit_jump(JUMP_IF_NOT)
-            self._compile_expr(node.children[2])
+            self._compile_expr(node.children[0])  # true value
             end = self._emit_jump(JUMP)
             self._patch_jump(jfalse)
-            self._compile_expr(node.children[3])
+            self._compile_expr(node.children[3])  # false value
             self._patch_jump(end)
             return
         self._compile_expr(node.children[0])
