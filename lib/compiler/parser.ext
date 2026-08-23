@@ -1,0 +1,650 @@
+# Externum Compiler — Parser
+# Written in Externum itself
+
+# ── parser state ─────────────────────────────────────────────────────
+struct ParserState:
+    tokens
+    pos
+    annotations
+    signatures
+    traits
+    impls
+    mutable
+
+def parser_new(tokens):
+    return ParserState(tokens, 0, [], [], [], [], [])
+
+def current(ps):
+    if ps.pos < len(ps.tokens):
+        return ps.tokens[ps.pos]
+    return Token("EOF", "", 0, 0)
+
+def peek_type(ps):
+    return current(ps).type
+
+def peek_value(ps):
+    return current(ps).value
+
+def advance(ps):
+    let tok = current(ps)
+    ps.pos = ps.pos + 1
+    return tok
+
+def expect(ps, type):
+    let tok = current(ps)
+    if tok.type != type:
+        raise RuntimeError("Expected " + type + " got " + tok.type + " at line " + str(tok.line))
+    return advance(ps)
+
+def match(ps, type):
+    if current(ps).type == type:
+        return advance(ps)
+    return None
+
+def skip_newlines(ps):
+    while peek_type(ps) == "NEWLINE":
+        advance(ps)
+
+# ── precedence table ─────────────────────────────────────────────────
+def get_precedence(op):
+    if op == "or":
+        return 2
+    if op == "and":
+        return 3
+    if op == "not":
+        return 4
+    if op == "in" or op == "is":
+        return 5
+    if op == "<" or op == ">" or op == "<=" or op == ">=":
+        return 6
+    if op == "==" or op == "!=":
+        return 7
+    if op == "|":
+        return 8
+    if op == "^":
+        return 9
+    if op == "&":
+        return 10
+    if op == "<<" or op == ">>":
+        return 11
+    if op == "+" or op == "-":
+        return 12
+    if op == "*" or op == "/" or op == "%" or op == "//":
+        return 13
+    if op == "**":
+        return 14
+    return 0
+
+# ── parse primary expression ─────────────────────────────────────────
+def parse_primary(ps):
+    let tok = current(ps)
+    let t = tok.type
+
+    # number
+    if t == "NUMBER" or t == "HEX_NUMBER" or t == "BINARY_NUMBER" or t == "OCTAL_NUMBER":
+        advance(ps)
+        return ast_leaf("NUMBER", tok.value)
+
+    # string
+    if t == "STRING":
+        advance(ps)
+        return ast_leaf("STRING", tok.value)
+
+    # char
+    if t == "CHAR":
+        advance(ps)
+        return ast_leaf("CHAR", tok.value)
+
+    # True/False/None
+    if t == "TRUE":
+        advance(ps)
+        return ast_leaf("BOOL", "True")
+    if t == "FALSE":
+        advance(ps)
+        return ast_leaf("BOOL", "False")
+    if t == "NONE":
+        advance(ps)
+        return ast_leaf("NONE", "None")
+
+    # identifier
+    if t == "IDENTIFIER" or t == "BUILTIN" or t == "SELF" or t == "OPEN":
+        advance(ps)
+        let node = ast_leaf("IDENTIFIER", tok.value)
+        return parse_postfix(ps, node)
+
+    # parenthesized expression
+    if t == "LPAREN":
+        advance(ps)
+        let expr = parse_expression(ps)
+        expect(ps, "RPAREN")
+        return parse_postfix(ps, expr)
+
+    # list literal
+    if t == "LBRACKET":
+        advance(ps)
+        let items = []
+        if peek_type(ps) != "RBRACKET":
+            items = items + [parse_expression(ps)]
+            while peek_type(ps) == "COMMA":
+                advance(ps)
+                if peek_type(ps) == "RBRACKET":
+                    break
+                items = items + [parse_expression(ps)]
+        expect(ps, "RBRACKET")
+        return ASTNode("LIST", str(items), items)
+
+    # dict literal
+    if t == "LBRACE":
+        advance(ps)
+        let pairs = []
+        if peek_type(ps) != "RBRACE":
+            let key = parse_expression(ps)
+            expect(ps, "COLON")
+            let val = parse_expression(ps)
+            pairs = pairs + [ASTNode("PAIR", "", [key, val])]
+            while peek_type(ps) == "COMMA":
+                advance(ps)
+                if peek_type(ps) == "RBRACE":
+                    break
+                key = parse_expression(ps)
+                expect(ps, "COLON")
+                val = parse_expression(ps)
+                pairs = pairs + [ASTNode("PAIR", "", [key, val])]
+        expect(ps, "RBRACE")
+        return ASTNode("DICT", "{}", pairs)
+
+    # unary operators
+    if t == "MINUS":
+        advance(ps)
+        let operand = parse_primary(ps)
+        return ASTNode("UNARY", "-", [operand])
+    if t == "NOT":
+        advance(ps)
+        let operand = parse_primary(ps)
+        return ASTNode("UNARY", "not", [operand])
+    if t == "TILDE":
+        advance(ps)
+        let operand = parse_primary(ps)
+        return ASTNode("UNARY", "~", [operand])
+
+    raise RuntimeError("Unexpected token: " + t + " " + tok.value + " at line " + str(tok.line))
+
+# ── parse postfix (calls, indexing, dot) ─────────────────────────────
+def parse_postfix(ps, node):
+    while True:
+        let t = peek_type(ps)
+
+        # function call
+        if t == "LPAREN":
+            advance(ps)
+            let args = []
+            if peek_type(ps) != "RPAREN":
+                args = args + [parse_expression(ps)]
+                while peek_type(ps) == "COMMA":
+                    advance(ps)
+                    if peek_type(ps) == "RPAREN":
+                        break
+                    args = args + [parse_expression(ps)]
+            expect(ps, "RPAREN")
+            node = ASTNode("CALL", node.value, [node] + args)
+
+        # indexing
+        elif t == "LBRACKET":
+            advance(ps)
+            let index = parse_expression(ps)
+            # check for slice
+            let slice_end = None
+            if peek_type(ps) == "COLON":
+                advance(ps)
+                if peek_type(ps) != "RBRACKET":
+                    slice_end = parse_expression(ps)
+            expect(ps, "RBRACKET")
+            if slice_end != None:
+                node = ASTNode("SLICE", "", [node, index, slice_end])
+            else:
+                node = ASTNode("INDEX", "", [node, index])
+
+        # dot access
+        elif t == "DOT":
+            advance(ps)
+            let attr = expect(ps, "IDENTIFIER")
+            node = ASTNode("DOT", attr.value, [node])
+
+        else:
+            break
+
+    return node
+
+# ── parse expression with precedence climbing ────────────────────────
+def parse_expression(ps, min_prec):
+    if min_prec == None:
+        min_prec = 0
+
+    let left = parse_primary(ps)
+
+    while True:
+        let tok = current(ps)
+        let t = tok.type
+
+        # assignment
+        if t == "ASSIGN":
+            advance(ps)
+            let val = parse_expression(ps, 0)
+            return ASTNode("ASSIGN", "", [left, val])
+
+        # augmented assignment
+        if t == "+=" or t == "-=" or t == "*=" or t == "/=" or t == "%=":
+            let op = tok.value
+            advance(ps)
+            let val = parse_expression(ps, 0)
+            return ASTNode("AUG_ASSIGN", op, [left, val])
+
+        # check if it's a binary operator
+        let op_val = tok.value
+        let prec = get_precedence(op_val)
+        if prec <= 0:
+            break
+        if prec < min_prec:
+            break
+
+        advance(ps)
+        let right = parse_expression(ps, prec + 1)
+        left = ASTNode("BINOP", op_val, [left, right])
+
+    return left
+
+def parse_expr(ps):
+    return parse_expression(ps, 0)
+
+# ── parse statement ──────────────────────────────────────────────────
+def parse_statement(ps):
+    let tok = current(ps)
+    let t = tok.type
+    skip_newlines(ps)
+
+    # def (function)
+    if t == "DEF":
+        return parse_def(ps)
+
+    # class
+    if t == "CLASS":
+        return parse_class(ps)
+
+    # if
+    if t == "IF":
+        return parse_if(ps)
+
+    # while
+    if t == "WHILE":
+        return parse_while(ps)
+
+    # for
+    if t == "FOR":
+        return parse_for(ps)
+
+    # loop
+    if t == "LOOP":
+        return parse_loop(ps)
+
+    # return
+    if t == "RETURN":
+        advance(ps)
+        if peek_type(ps) == "NEWLINE" or peek_type(ps) == "EOF":
+            return ASTNode("RETURN", "", [])
+        let val = parse_expr(ps)
+        return ASTNode("RETURN", "", [val])
+
+    # break
+    if t == "BREAK":
+        advance(ps)
+        return ASTNode("BREAK", "", [])
+
+    # continue
+    if t == "CONTINUE":
+        advance(ps)
+        return ASTNode("CONTINUE", "", [])
+
+    # pass
+    if t == "PASS":
+        advance(ps)
+        return ASTNode("PASS", "", [])
+
+    # import
+    if t == "IMPORT":
+        return parse_import(ps)
+
+    # from ... import
+    if t == "FROM":
+        return parse_from_import(ps)
+
+    # try
+    if t == "TRY":
+        return parse_try(ps)
+
+    # raise
+    if t == "RAISE":
+        advance(ps)
+        if peek_type(ps) == "NEWLINE" or peek_type(ps) == "EOF":
+            return ASTNode("RAISE", "", [])
+        let val = parse_expr(ps)
+        return ASTNode("RAISE", "", [val])
+
+    # assert
+    if t == "ASSERT":
+        advance(ps)
+        let cond = parse_expr(ps)
+        return ASTNode("ASSERT", "", [cond])
+
+    # struct
+    if t == "STRUCT":
+        return parse_struct(ps)
+
+    # enum
+    if t == "ENUM":
+        return parse_enum(ps)
+
+    # let
+    if t == "LET":
+        return parse_let(ps)
+
+    # const
+    if t == "CONST":
+        return parse_const_stmt(ps)
+
+    # match
+    if t == "MATCH":
+        return parse_match(ps)
+
+    # expression statement
+    let expr = parse_expr(ps)
+    return expr
+
+# ── parse def ────────────────────────────────────────────────────────
+def parse_def(ps):
+    advance(ps)  # skip 'def'
+    let name_tok = expect(ps, "IDENTIFIER")
+    expect(ps, "LPAREN")
+
+    # parameters
+    let params = []
+    let defaults = []
+    if peek_type(ps) != "RPAREN":
+        let pname = expect(ps, "IDENTIFIER")
+        let default = None
+        if peek_type(ps) == "COLON":
+            advance(ps)
+            let ptype = parse_expr(ps)
+            default = ptype
+        if peek_type(ps) == "ASSIGN":
+            advance(ps)
+            default = parse_expr(ps)
+        params = params + [pname.value]
+        defaults = defaults + [default]
+        while peek_type(ps) == "COMMA":
+            advance(ps)
+            pname = expect(ps, "IDENTIFIER")
+            default = None
+            if peek_type(ps) == "COLON":
+                advance(ps)
+                let ptype = parse_expr(ps)
+                default = ptype
+            if peek_type(ps) == "ASSIGN":
+                advance(ps)
+                default = parse_expr(ps)
+            params = params + [pname.value]
+            defaults = defaults + [default]
+    expect(ps, "RPAREN")
+
+    # return type annotation
+    let ret_type = None
+    if peek_type(ps) == "ARROW":
+        advance(ps)
+        ret_type = parse_expr(ps)
+
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let body = parse_block(ps)
+    expect(ps, "DEDENT")
+
+    let node = ASTNode("FUNCTION", name_tok.value, body)
+    node.value = name_tok.value
+    return node
+
+# ── parse class ──────────────────────────────────────────────────────
+def parse_class(ps):
+    advance(ps)  # skip 'class'
+    let name_tok = expect(ps, "IDENTIFIER")
+
+    # optional bases
+    let bases = []
+    if peek_type(ps) == "LPAREN":
+        advance(ps)
+        if peek_type(ps) != "RPAREN":
+            bases = bases + [parse_expr(ps)]
+            while peek_type(ps) == "COMMA":
+                advance(ps)
+                bases = bases + [parse_expr(ps)]
+        expect(ps, "RPAREN")
+
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let body = parse_block(ps)
+    expect(ps, "DEDENT")
+
+    let node = ASTNode("CLASS", name_tok.value, body)
+    return node
+
+# ── parse if ─────────────────────────────────────────────────────────
+def parse_if(ps):
+    advance(ps)  # skip 'if'
+    let cond = parse_expr(ps)
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let then_body = parse_block(ps)
+    expect(ps, "DEDENT")
+    skip_newlines(ps)
+
+    let else_body = []
+    if peek_type(ps) == "ELIF":
+        else_body = [parse_if(ps)]
+    elif peek_type(ps) == "ELSE":
+        advance(ps)
+        expect(ps, "COLON")
+        skip_newlines(ps)
+        expect(ps, "INDENT")
+        else_body = parse_block(ps)
+        expect(ps, "DEDENT")
+
+    return ASTNode("IF", "", [cond] + then_body + [["else", else_body]])
+
+# ── parse while ──────────────────────────────────────────────────────
+def parse_while(ps):
+    advance(ps)
+    let cond = parse_expr(ps)
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let body = parse_block(ps)
+    expect(ps, "DEDENT")
+    return ASTNode("WHILE", "", [cond] + body)
+
+# ── parse for ────────────────────────────────────────────────────────
+def parse_for(ps):
+    advance(ps)
+    let var = expect(ps, "IDENTIFIER")
+    expect(ps, "IN")
+    let iter_expr = parse_expr(ps)
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let body = parse_block(ps)
+    expect(ps, "DEDENT")
+    return ASTNode("FOR", var.value, [iter_expr] + body)
+
+# ── parse loop ───────────────────────────────────────────────────────
+def parse_loop(ps):
+    advance(ps)
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let body = parse_block(ps)
+    expect(ps, "DEDENT")
+    return ASTNode("LOOP", "", body)
+
+# ── parse import ─────────────────────────────────────────────────────
+def parse_import(ps):
+    advance(ps)  # skip 'import'
+    let names = []
+    let name = expect(ps, "IDENTIFIER")
+    names = names + [name.value]
+    while peek_type(ps) == "COMMA":
+        advance(ps)
+        name = expect(ps, "IDENTIFIER")
+        names = names + [name.value]
+    return ASTNode("IMPORT", ",".join(names), [])
+
+# ── parse from ... import ───────────────────────────────────────────
+def parse_from_import(ps):
+    advance(ps)  # skip 'from'
+    let mod = expect(ps, "IDENTIFIER")
+    expect(ps, "IMPORT")
+    let names = []
+    let name = expect(ps, "IDENTIFIER")
+    names = names + [name.value]
+    while peek_type(ps) == "COMMA":
+        advance(ps)
+        name = expect(ps, "IDENTIFIER")
+        names = names + [name.value]
+    return ASTNode("FROM_IMPORT", mod.value + " import " + ",".join(names), [])
+
+# ── parse try ────────────────────────────────────────────────────────
+def parse_try(ps):
+    advance(ps)
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let try_body = parse_block(ps)
+    expect(ps, "DEDENT")
+    skip_newlines(ps)
+
+    let catch_clauses = []
+    let finally_body = []
+    while peek_type(ps) == "EXCEPT":
+        advance(ps)
+        let exc_type = None
+        if peek_type(ps) != "COLON":
+            exc_type = parse_expr(ps)
+        expect(ps, "COLON")
+        skip_newlines(ps)
+        expect(ps, "INDENT")
+        let body = parse_block(ps)
+        expect(ps, "DEDENT")
+        catch_clauses = catch_clauses + [[exc_type, body]]
+        skip_newlines(ps)
+
+    if peek_type(ps) == "FINALLY":
+        advance(ps)
+        expect(ps, "COLON")
+        skip_newlines(ps)
+        expect(ps, "INDENT")
+        finally_body = parse_block(ps)
+        expect(ps, "DEDENT")
+
+    return ASTNode("TRY", "", try_body + catch_clauses + finally_body)
+
+# ── parse struct ─────────────────────────────────────────────────────
+def parse_struct(ps):
+    advance(ps)
+    let name = expect(ps, "IDENTIFIER")
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let fields = []
+    while peek_type(ps) != "DEDENT" and peek_type(ps) != "EOF":
+        let fname = expect(ps, "IDENTIFIER")
+        expect(ps, "COLON")
+        let ftype = parse_expr(ps)
+        fields = fields + [ASTNode("FIELD", fname.value, [ftype])]
+        skip_newlines(ps)
+    expect(ps, "DEDENT")
+    return ASTNode("STRUCT", name.value, fields)
+
+# ── parse enum ───────────────────────────────────────────────────────
+def parse_enum(ps):
+    advance(ps)
+    let name = expect(ps, "IDENTIFIER")
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let variants = []
+    while peek_type(ps) != "DEDENT" and peek_type(ps) != "EOF":
+        let vname = expect(ps, "IDENTIFIER")
+        variants = variants + [ASTNode("VARIANT", vname.value, [])]
+        skip_newlines(ps)
+    expect(ps, "DEDENT")
+    return ASTNode("ENUM", name.value, variants)
+
+# ── parse let ────────────────────────────────────────────────────────
+def parse_let(ps):
+    advance(ps)
+    let name = expect(ps, "IDENTIFIER")
+    expect(ps, "ASSIGN")
+    let val = parse_expr(ps)
+    return ASTNode("LET", name.value, [val])
+
+# ── parse const statement ───────────────────────────────────────────
+def parse_const_stmt(ps):
+    advance(ps)
+    let name = expect(ps, "IDENTIFIER")
+    expect(ps, "ASSIGN")
+    let val = parse_expr(ps)
+    return ASTNode("CONST", name.value, [val])
+
+# ── parse match ──────────────────────────────────────────────────────
+def parse_match(ps):
+    advance(ps)
+    let expr = parse_expr(ps)
+    expect(ps, "COLON")
+    skip_newlines(ps)
+    expect(ps, "INDENT")
+    let cases = []
+    while peek_type(ps) != "DEDENT" and peek_type(ps) != "EOF":
+        expect(ps, "CASE")
+        let pattern = parse_expr(ps)
+        expect(ps, "COLON")
+        skip_newlines(ps)
+        expect(ps, "INDENT")
+        let body = parse_block(ps)
+        expect(ps, "DEDENT")
+        cases = cases + [ASTNode("CASE", "", [pattern] + body)]
+        skip_newlines(ps)
+    expect(ps, "DEDENT")
+    return ASTNode("MATCH", "", [expr] + cases)
+
+# ── parse block ──────────────────────────────────────────────────────
+def parse_block(ps):
+    let stmts = []
+    skip_newlines(ps)
+    while peek_type(ps) != "DEDENT" and peek_type(ps) != "EOF":
+        let stmt = parse_statement(ps)
+        stmts = stmts + [stmt]
+        skip_newlines(ps)
+    return stmts
+
+# ── parse module (top-level) ────────────────────────────────────────
+def parse_module(ps):
+    let stmts = []
+    skip_newlines(ps)
+    while peek_type(ps) != "EOF":
+        let stmt = parse_statement(ps)
+        stmts = stmts + [stmt]
+        skip_newlines(ps)
+    return stmts
+
+# ── entry point ──────────────────────────────────────────────────────
+def parse(tokens):
+    let ps = parser_new(tokens)
+    return parse_module(ps)

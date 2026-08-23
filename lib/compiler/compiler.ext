@@ -1,0 +1,865 @@
+# Externum Compiler — Bytecode Compiler
+# Written in Externum itself
+
+# ── opcode constants ─────────────────────────────────────────────────
+const OP_NOP = 0x00
+const OP_HALT = 0x01
+const OP_RETURN = 0x02
+const OP_LOAD_CONST = 0x10
+const OP_LOAD_VAR = 0x11
+const OP_STORE_VAR = 0x12
+const OP_LOAD_GLOBAL = 0x13
+const OP_STORE_GLOBAL = 0x14
+const OP_POP = 0x20
+const OP_DUP = 0x21
+const OP_SWAP = 0x22
+const OP_ADD = 0x30
+const OP_SUB = 0x31
+const OP_MUL = 0x32
+const OP_DIV = 0x33
+const OP_MOD = 0x34
+const OP_POW = 0x35
+const OP_FLOOR_DIV = 0x36
+const OP_NEG = 0x37
+const OP_NOT = 0x38
+const OP_BITAND = 0x39
+const OP_BITOR = 0x3A
+const OP_BITXOR = 0x3B
+const OP_BITNOT = 0x3C
+const OP_LSHIFT = 0x3D
+const OP_RSHIFT = 0x3E
+const OP_EQ = 0x40
+const OP_NEQ = 0x41
+const OP_LT = 0x42
+const OP_GT = 0x43
+const OP_LTE = 0x44
+const OP_GTE = 0x45
+const OP_AND = 0x46
+const OP_OR = 0x47
+const OP_IN_OP = 0x48
+const OP_IS_OP = 0x49
+const OP_JUMP = 0x50
+const OP_JUMP_IF = 0x51
+const OP_JUMP_IF_NOT = 0x52
+const OP_CALL = 0x60
+const OP_MAKE_FN = 0x61
+const OP_MAKE_CLASS = 0x62
+const OP_GET_ATTR = 0x70
+const OP_SET_ATTR = 0x71
+const OP_GET_INDEX = 0x72
+const OP_SET_INDEX = 0x73
+const OP_MAKE_LIST = 0x80
+const OP_MAKE_DICT = 0x81
+const OP_MAKE_TUPLE = 0x82
+const OP_FOR_ITER = 0x90
+const OP_LOOP_BREAK = 0x91
+const OP_TRY_BEGIN = 0xA0
+const OP_TRY_END = 0xA1
+const OP_RAISE_OP = 0xA2
+const OP_POP_EXCEPT = 0xA3
+const OP_IMPORT = 0xB0
+const OP_INTRINSIC = 0xF0
+
+# ── compiler state ───────────────────────────────────────────────────
+struct CompilerState:
+    bytecode
+    constants
+    functions
+    globals
+    current_fn
+    loop_stack
+    loop_start_stack
+
+def compiler_new():
+    return CompilerState([], [], [], [], None, [], [])
+
+# ── constant pool ────────────────────────────────────────────────────
+def add_const(cs, value):
+    # check if already in pool
+    let i = 0
+    while i < len(cs.constants):
+        if cs.constants[i] == value:
+            return i
+        i = i + 1
+    cs.constants = cs.constants + [value]
+    return len(cs.constants) - 1
+
+# ── emit helpers ─────────────────────────────────────────────────────
+def emit_byte(cs, op):
+    cs.bytecode = cs.bytecode + [op]
+
+def emit_u16(cs, op, val):
+    cs.bytecode = cs.bytecode + [op, (val >> 8) & 0xFF, val & 0xFF]
+
+def emit_u8(cs, op, val):
+    cs.bytecode = cs.bytecode + [op, val & 0xFF]
+
+def emit2(cs, op, idx, argc):
+    cs.bytecode = cs.bytecode + [op, (idx >> 8) & 0xFF, idx & 0xFF, argc]
+
+def patch_jump(cs, offset, target):
+    cs.bytecode[offset + 1] = (target >> 8) & 0xFF
+    cs.bytecode[offset + 2] = target & 0xFF
+
+# ── name resolution ──────────────────────────────────────────────────
+def resolve_name(cs, name):
+    if cs.current_fn != None:
+        return "local"
+    # check if it's a declared global
+    let i = 0
+    while i < len(cs.globals):
+        if cs.globals[i] == name:
+            return "global"
+        i = i + 1
+    return "global"
+
+def declare_global(cs, name):
+    let i = 0
+    while i < len(cs.globals):
+        if cs.globals[i] == name:
+            return
+        i = i + 1
+    cs.globals = cs.globals + [name]
+
+# ── compile expression ───────────────────────────────────────────────
+def compile_expr(cs, node):
+    if node == None:
+        return
+
+    let t = node.type
+
+    # literal
+    if t == "NUMBER":
+        let val = node.value
+        if val[0] == "0" and len(val) > 2 and val[1] == "x":
+            let idx = add_const(cs, int(val, 16))
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        elif val[0] == "0" and len(val) > 2 and val[1] == "b":
+            let idx = add_const(cs, int(val, 2))
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        else:
+            let idx = add_const(cs, float(val) if "." in val else int(val))
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        return
+
+    if t == "STRING":
+        let val = node.value
+        # strip quotes
+        let inner = val[1:len(val) - 1]
+        let idx = add_const(cs, inner)
+        emit_u16(cs, OP_LOAD_CONST, idx)
+        return
+
+    if t == "CHAR":
+        let val = node.value
+        let inner = val[1:len(val) - 1]
+        let idx = add_const(cs, inner)
+        emit_u16(cs, OP_LOAD_CONST, idx)
+        return
+
+    if t == "BOOL":
+        let val = node.value
+        if val == "True":
+            let idx = add_const(cs, True)
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        else:
+            let idx = add_const(cs, False)
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        return
+
+    if t == "NONE":
+        let idx = add_const(cs, None)
+        emit_u16(cs, OP_LOAD_CONST, idx)
+        return
+
+    # identifier
+    if t == "IDENTIFIER":
+        let name = node.value
+        if name == "True":
+            let idx = add_const(cs, True)
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        elif name == "False":
+            let idx = add_const(cs, False)
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        elif name == "None":
+            let idx = add_const(cs, None)
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        else:
+            let kind = resolve_name(cs, name)
+            let idx = add_const(cs, name)
+            if kind == "local":
+                emit_u16(cs, OP_LOAD_VAR, idx)
+            else:
+                emit_u16(cs, OP_LOAD_GLOBAL, idx)
+        return
+
+    # binary operation
+    if t == "BINOP":
+        let op = node.value
+        compile_expr(cs, node.children[0])
+        compile_expr(cs, node.children[1])
+
+        let opcode = OP_ADD
+        if op == "+":
+            opcode = OP_ADD
+        elif op == "-":
+            opcode = OP_SUB
+        elif op == "*":
+            opcode = OP_MUL
+        elif op == "/":
+            opcode = OP_DIV
+        elif op == "%":
+            opcode = OP_MOD
+        elif op == "**":
+            opcode = OP_POW
+        elif op == "//":
+            opcode = OP_FLOOR_DIV
+        elif op == "==":
+            opcode = OP_EQ
+        elif op == "!=":
+            opcode = OP_NEQ
+        elif op == "<":
+            opcode = OP_LT
+        elif op == ">":
+            opcode = OP_GT
+        elif op == "<=":
+            opcode = OP_LTE
+        elif op == ">=":
+            opcode = OP_GTE
+        elif op == "and":
+            opcode = OP_AND
+        elif op == "or":
+            opcode = OP_OR
+        elif op == "in":
+            opcode = OP_IN_OP
+        elif op == "is":
+            opcode = OP_IS_OP
+        elif op == "&":
+            opcode = OP_BITAND
+        elif op == "|":
+            opcode = OP_BITOR
+        elif op == "^":
+            opcode = OP_BITXOR
+        elif op == "<<":
+            opcode = OP_LSHIFT
+        elif op == ">>":
+            opcode = OP_RSHIFT
+        emit_byte(cs, opcode)
+        return
+
+    # unary
+    if t == "UNARY":
+        compile_expr(cs, node.children[0])
+        if node.value == "-":
+            emit_byte(cs, OP_NEG)
+        elif node.value == "not":
+            emit_byte(cs, OP_NOT)
+        elif node.value == "~":
+            emit_byte(cs, OP_BITNOT)
+        return
+
+    # call
+    if t == "CALL":
+        let fn_name = node.value
+        let args = node.children[1:]
+
+        # check if it's a builtin
+        let builtin_names = [
+            "print", "len", "str", "int", "float", "range", "type",
+            "input", "open", "alloc", "free", "panic", "dbg", "trace",
+            "assert_eq", "Ok", "Err", "Some", "sorted", "enumerate",
+            "zip", "min", "max", "sum", "abs", "round", "chr", "ord",
+            "hex", "oct", "bin", "hash", "isinstance", "repr", "id",
+            "term_init", "term_cleanup", "term_clear", "term_refresh",
+            "term_size", "term_move", "term_write", "term_color",
+            "term_getkey", "term_addstr", "term_border", "term_hline",
+            "term_vline", "term_getstr", "term_attr",
+        ]
+
+        let is_builtin = False
+        let i = 0
+        while i < len(builtin_names):
+            if fn_name == builtin_names[i]:
+                is_builtin = True
+                break
+            i = i + 1
+
+        if is_builtin:
+            let builtin_map = {
+                "print": 0, "len": 1, "str": 2, "int": 3, "float": 4,
+                "range": 5, "type": 6, "input": 7, "open": 8,
+                "alloc": 10, "free": 11, "panic": 20, "dbg": 21,
+                "assert_eq": 23, "Ok": 32, "Err": 33, "Some": 34,
+                "sorted": 40, "enumerate": 41, "zip": 42,
+                "min": 44, "max": 45, "sum": 46, "abs": 47,
+                "round": 48, "chr": 49, "ord": 50,
+                "hex": 51, "oct": 52, "bin": 53, "hash": 54,
+                "isinstance": 55, "repr": 56, "id": 57,
+                "term_init": 60, "term_cleanup": 61, "term_clear": 62,
+                "term_refresh": 63, "term_size": 64, "term_move": 65,
+                "term_write": 66, "term_color": 67, "term_getkey": 68,
+                "term_addstr": 69, "term_border": 70, "term_hline": 71,
+                "term_vline": 72, "term_getstr": 73, "term_attr": 74,
+            }
+            if fn_name in builtin_map:
+                let code = builtin_map[fn_name]
+                let j = 0
+                while j < len(args):
+                    compile_expr(cs, args[j])
+                    j = j + 1
+                emit2(cs, OP_INTRINSIC, code, len(args))
+            else:
+                # unknown builtin, treat as regular call
+                let idx = add_const(cs, fn_name)
+                emit_u16(cs, OP_LOAD_GLOBAL, idx)
+                let j = 0
+                while j < len(args):
+                    compile_expr(cs, args[j])
+                    j = j + 1
+                emit_u8(cs, OP_CALL, len(args))
+            return
+
+        # dotted call (e.g. obj.method())
+        if "." in fn_name:
+            let parts = split_dot(fn_name)
+            let idx = add_const(cs, parts[0])
+            emit_u16(cs, OP_LOAD_GLOBAL, idx)
+            let j = 1
+            while j < len(parts):
+                let attr_idx = add_const(cs, parts[j])
+                emit_u16(cs, OP_GET_ATTR, attr_idx)
+                j = j + 1
+            let j2 = 0
+            while j2 < len(args):
+                compile_expr(cs, args[j2])
+                j2 = j2 + 1
+            emit_u8(cs, OP_CALL, len(args))
+            return
+
+        # regular function call
+        let idx = add_const(cs, fn_name)
+        emit_u16(cs, OP_LOAD_GLOBAL, idx)
+        let j = 0
+        while j < len(args):
+            compile_expr(cs, args[j])
+            j = j + 1
+        emit_u8(cs, OP_CALL, len(args))
+        return
+
+    # list
+    if t == "LIST":
+        let items = node.children
+        let j = 0
+        while j < len(items):
+            compile_expr(cs, items[j])
+            j = j + 1
+        emit_u16(cs, OP_MAKE_LIST, len(items))
+        return
+
+    # dict
+    if t == "DICT":
+        let pairs = node.children
+        let j = 0
+        while j < len(pairs):
+            let pair = pairs[j]
+            compile_expr(cs, pair.children[0])
+            compile_expr(cs, pair.children[1])
+            j = j + 1
+        emit_u16(cs, OP_MAKE_DICT, len(pairs))
+        return
+
+    # index
+    if t == "INDEX":
+        compile_expr(cs, node.children[0])
+        compile_expr(cs, node.children[1])
+        emit_byte(cs, OP_GET_INDEX)
+        return
+
+    # dot access
+    if t == "DOT":
+        compile_expr(cs, node.children[0])
+        let attr_idx = add_const(cs, node.value)
+        emit_u16(cs, OP_GET_ATTR, attr_idx)
+        return
+
+    # assignment
+    if t == "ASSIGN":
+        let target = node.children[0]
+        compile_expr(cs, node.children[1])
+        if target.type == "IDENTIFIER":
+            let name = target.value
+            let kind = resolve_name(cs, name)
+            let idx = add_const(cs, name)
+            if kind == "local":
+                emit_u16(cs, OP_STORE_VAR, idx)
+            else:
+                declare_global(cs, name)
+                emit_u16(cs, OP_STORE_GLOBAL, idx)
+        elif target.type == "DOT":
+            compile_expr(cs, target.children[0])
+            let attr_idx = add_const(cs, target.value)
+            emit_u16(cs, OP_SET_ATTR, attr_idx)
+        elif target.type == "INDEX":
+            compile_expr(cs, target.children[0])
+            compile_expr(cs, target.children[1])
+            # swap: we need obj, idx, val but stack has obj, idx, val
+            emit_byte(cs, OP_SET_INDEX)
+        return
+
+    # augmented assignment
+    if t == "AUG_ASSIGN":
+        let target = node.children[0]
+        compile_expr(cs, target)
+        compile_expr(cs, node.children[1])
+        let op = node.value
+        if op == "+=":
+            emit_byte(cs, OP_ADD)
+        elif op == "-=":
+            emit_byte(cs, OP_SUB)
+        elif op == "*=":
+            emit_byte(cs, OP_MUL)
+        elif op == "/=":
+            emit_byte(cs, OP_DIV)
+        elif op == "%=":
+            emit_byte(cs, OP_MOD)
+        if target.type == "IDENTIFIER":
+            let name = target.value
+            let idx = add_const(cs, name)
+            emit_u16(cs, OP_STORE_GLOBAL, idx)
+        return
+
+    # let
+    if t == "LET":
+        compile_expr(cs, node.children[0])
+        declare_global(cs, node.value)
+        let idx = add_const(cs, node.value)
+        emit_u16(cs, OP_STORE_GLOBAL, idx)
+        return
+
+    # const
+    if t == "CONST":
+        compile_expr(cs, node.children[0])
+        declare_global(cs, node.value)
+        let idx = add_const(cs, node.value)
+        emit_u16(cs, OP_STORE_GLOBAL, idx)
+        return
+
+    # list comprehension would go here...
+
+    # slice
+    if t == "SLICE":
+        compile_expr(cs, node.children[0])
+        compile_expr(cs, node.children[1])
+        compile_expr(cs, node.children[2])
+        emit_byte(cs, OP_GET_INDEX)
+        return
+
+# ── compile statement ────────────────────────────────────────────────
+def compile_stmt(cs, node):
+    if node == None:
+        return
+
+    let t = node.type
+
+    # expression statement
+    if t == "IDENTIFIER" or t == "BINOP" or t == "CALL" or t == "INDEX" or t == "DOT" or t == "ASSIGN" or t == "AUG_ASSIGN":
+        compile_expr(cs, node)
+        return
+
+    # function definition
+    if t == "FUNCTION":
+        compile_function(cs, node)
+        return
+
+    # class definition
+    if t == "CLASS":
+        compile_class(cs, node)
+        return
+
+    # return
+    if t == "RETURN":
+        if len(node.children) > 0:
+            compile_expr(cs, node.children[0])
+        else:
+            let idx = add_const(cs, None)
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        emit_byte(cs, OP_RETURN)
+        return
+
+    # break
+    if t == "BREAK":
+        if len(cs.loop_stack) > 0:
+            emit_u16(cs, OP_LOOP_BREAK, 0)  # placeholder
+            let loop_idx = len(cs.loop_stack) - 1
+            let fixup = len(cs.bytecode) - 2
+            cs.loop_stack[loop_idx] = cs.loop_stack[loop_idx] + [fixup]
+        return
+
+    # continue
+    if t == "CONTINUE":
+        if len(cs.loop_start_stack) > 0:
+            let start = cs.loop_start_stack[len(cs.loop_start_stack) - 1]
+            emit_u16(cs, OP_JUMP, start)
+        return
+
+    # if
+    if t == "IF":
+        compile_if(cs, node)
+        return
+
+    # while
+    if t == "WHILE":
+        compile_while(cs, node)
+        return
+
+    # for
+    if t == "FOR":
+        compile_for(cs, node)
+        return
+
+    # loop
+    if t == "LOOP":
+        compile_loop_stmt(cs, node)
+        return
+
+    # import
+    if t == "IMPORT":
+        let import_str = "import " + node.value
+        let idx = add_const(cs, import_str)
+        emit_u16(cs, OP_IMPORT, idx)
+        return
+
+    # from ... import
+    if t == "FROM_IMPORT":
+        let idx = add_const(cs, node.value)
+        emit_u16(cs, OP_IMPORT, idx)
+        return
+
+    # struct
+    if t == "STRUCT":
+        compile_struct(cs, node)
+        return
+
+    # enum
+    if t == "ENUM":
+        compile_enum(cs, node)
+        return
+
+    # let/const at statement level
+    if t == "LET":
+        compile_expr(cs, node)
+        return
+
+    if t == "CONST":
+        compile_expr(cs, node)
+        return
+
+    # pass
+    if t == "PASS":
+        emit_byte(cs, OP_NOP)
+        return
+
+    # try
+    if t == "TRY":
+        compile_try(cs, node)
+        return
+
+    # raise
+    if t == "RAISE":
+        if len(node.children) > 0:
+            compile_expr(cs, node.children[0])
+        else:
+            let idx = add_const(cs, "raise")
+            emit_u16(cs, OP_LOAD_CONST, idx)
+        emit_byte(cs, OP_RAISE_OP)
+        return
+
+    # assert
+    if t == "ASSERT":
+        if len(node.children) > 0:
+            compile_expr(cs, node.children[0])
+        emit_byte(cs, OP_ASSERT_EQ)
+        return
+
+# ── compile function ─────────────────────────────────────────────────
+def compile_function(cs, node):
+    let name = node.value
+    let body_nodes = node.children
+
+    # Create inner compiler state
+    let inner = compiler_new()
+    inner.constants = cs.constants
+    inner.globals = cs.globals
+    inner.current_fn = name
+
+    # Compile function body
+    let i = 0
+    while i < len(body_nodes):
+        compile_stmt(inner, body_nodes[i])
+        i = i + 1
+
+    # Ensure return
+    emit_byte(inner, OP_RETURN)
+
+    # Create function object
+    let fn = BytecodeFunction(name, [], inner.bytecode, inner.constants, [], {})
+    let fn_idx = len(cs.functions)
+    cs.functions = cs.functions + [fn]
+
+    # Update cs.constants and cs.functions
+    cs.constants = inner.constants
+    cs.globals = inner.globals
+
+    # Emit MAKE_FN
+    emit_u16(cs, OP_MAKE_FN, fn_idx)
+
+    # Store in global
+    declare_global(cs, name)
+    let idx = add_const(cs, name)
+    emit_u16(cs, OP_STORE_GLOBAL, idx)
+
+# ── compile class ────────────────────────────────────────────────────
+def compile_class(cs, node):
+    let name = node.value
+    let body_nodes = node.children
+
+    # Emit MAKE_CLASS
+    let name_idx = add_const(cs, name)
+    emit_u16(cs, OP_MAKE_CLASS, name_idx)
+
+    # Compile body (methods)
+    let i = 0
+    while i < len(body_nodes):
+        let stmt = body_nodes[i]
+        if stmt.type == "FUNCTION":
+            # Compile method
+            let method_name = stmt.value
+            compile_function(cs, stmt)
+            # SET_ATTR on the class
+            let attr_idx = add_const(cs, method_name)
+            emit_u16(cs, OP_SET_ATTR, attr_idx)
+            emit_byte(cs, OP_POP)
+        i = i + 1
+
+    # Store class in global
+    declare_global(cs, name)
+    let idx = add_const(cs, name)
+    emit_u16(cs, OP_STORE_GLOBAL, idx)
+
+# ── compile if ───────────────────────────────────────────────────────
+def compile_if(cs, node):
+    let children = node.children
+    let cond = children[0]
+
+    # Compile condition
+    compile_expr(cs, cond)
+
+    # Jump to else/elif if false
+    emit_u16(cs, OP_JUMP_IF_NOT, 0)
+    let patch_offset = len(cs.bytecode) - 3
+
+    # Compile then body (skip first child which is condition)
+    let i = 1
+    while i < len(children):
+        let child = children[i]
+        if isinstance(child, list) and len(child) > 0 and child[0] == "else":
+            break
+        compile_stmt(cs, child)
+        i = i + 1
+
+    # Patch jump
+    let after_then = len(cs.bytecode)
+    patch_jump(cs, patch_offset, after_then)
+
+    # Compile else if present
+    while i < len(children):
+        let child = children[i]
+        if isinstance(child, list) and len(child) > 0 and child[0] == "else":
+            let else_body = child[1]
+            let j = 0
+            while j < len(else_body):
+                compile_stmt(cs, else_body[j])
+                j = j + 1
+            break
+        i = i + 1
+
+# ── compile while ────────────────────────────────────────────────────
+def compile_while(cs, node):
+    let loop_start = len(cs.bytecode)
+    cs.loop_stack = cs.loop_stack + [[]]
+    cs.loop_start_stack = cs.loop_start_stack + [loop_start]
+
+    # Condition
+    compile_expr(cs, node.children[0])
+
+    # Jump out if false
+    emit_u16(cs, OP_JUMP_IF_NOT, 0)
+    let patch_offset = len(cs.bytecode) - 3
+
+    # Body
+    let i = 1
+    while i < len(node.children):
+        compile_stmt(cs, node.children[i])
+        i = i + 1
+
+    # Loop back
+    emit_u16(cs, OP_JUMP, loop_start)
+
+    # Patch jump out
+    let after = len(cs.bytecode)
+    patch_jump(cs, patch_offset, after)
+
+    # Fix break jumps
+    let breaks = cs.loop_stack[len(cs.loop_stack) - 1]
+    let b = 0
+    while b < len(breaks):
+        patch_jump(cs, breaks[b], after)
+        b = b + 1
+
+    cs.loop_stack = cs.loop_stack[0:len(cs.loop_stack) - 1]
+    cs.loop_start_stack = cs.loop_start_stack[0:len(cs.loop_start_stack) - 1]
+
+# ── compile for ──────────────────────────────────────────────────────
+def compile_for(cs, node):
+    let var_name = node.value
+    let iter_expr = node.children[0]
+
+    # Compile iterable
+    compile_expr(cs, iter_expr)
+
+    # FOR_ITER
+    let loop_start = len(cs.bytecode)
+    cs.loop_stack = cs.loop_stack + [[]]
+    cs.loop_start_stack = cs.loop_start_stack + [loop_start]
+
+    emit_u16(cs, OP_FOR_ITER, 0)  # placeholder
+    let iter_patch = len(cs.bytecode) - 3
+
+    # Store iterator variable
+    declare_global(cs, var_name)
+    let idx = add_const(cs, var_name)
+    emit_u16(cs, OP_STORE_GLOBAL, idx)
+
+    # Body
+    let i = 1
+    while i < len(node.children):
+        compile_stmt(cs, node.children[i])
+        i = i + 1
+
+    # Loop back
+    emit_u16(cs, OP_JUMP, loop_start)
+
+    # Patch FOR_ITER exit
+    let after = len(cs.bytecode)
+    patch_jump(cs, iter_patch, after)
+
+    # Fix break jumps
+    let breaks = cs.loop_stack[len(cs.loop_stack) - 1]
+    let b = 0
+    while b < len(breaks):
+        patch_jump(cs, breaks[b], after)
+        b = b + 1
+
+    cs.loop_stack = cs.loop_stack[0:len(cs.loop_stack) - 1]
+    cs.loop_start_stack = cs.loop_start_stack[0:len(cs.loop_start_stack) - 1]
+
+# ── compile loop statement ──────────────────────────────────────────
+def compile_loop_stmt(cs, node):
+    let loop_start = len(cs.bytecode)
+    cs.loop_stack = cs.loop_stack + [[]]
+    cs.loop_start_stack = cs.loop_start_stack + [loop_start]
+
+    # Body
+    let i = 0
+    while i < len(node.children):
+        compile_stmt(cs, node.children[i])
+        i = i + 1
+
+    # Loop back
+    emit_u16(cs, OP_JUMP, loop_start)
+
+    # Fix break jumps
+    let breaks = cs.loop_stack[len(cs.loop_stack) - 1]
+    let after = len(cs.bytecode)
+    let b = 0
+    while b < len(breaks):
+        patch_jump(cs, breaks[b], after)
+        b = b + 1
+
+    cs.loop_stack = cs.loop_stack[0:len(cs.loop_stack) - 1]
+    cs.loop_start_stack = cs.loop_start_stack[0:len(cs.loop_start_stack) - 1]
+
+# ── compile struct ───────────────────────────────────────────────────
+def compile_struct(cs, node):
+    let name = node.value
+    let fields = node.children
+    let field_count = len(fields)
+
+    # Emit MAKE_STRUCT
+    let name_idx = add_const(cs, name)
+    emit_u8(cs, OP_MAKE_STRUCT, field_count)
+    cs.bytecode[len(cs.bytecode) - 3] = (name_idx >> 8) & 0xFF
+    cs.bytecode[len(cs.bytecode) - 2] = name_idx & 0xFF
+    cs.bytecode[len(cs.bytecode) - 1] = field_count
+
+    # Store struct in global
+    declare_global(cs, name)
+    let idx = add_const(cs, name)
+    emit_u16(cs, OP_STORE_GLOBAL, idx)
+
+# ── compile enum ─────────────────────────────────────────────────────
+def compile_enum(cs, node):
+    let name = node.value
+    let variants = node.children
+    let variant_count = len(variants)
+
+    # Emit MAKE_ENUM
+    let name_idx = add_const(cs, name)
+    emit_u8(cs, OP_MAKE_ENUM, variant_count)
+    cs.bytecode[len(cs.bytecode) - 3] = (name_idx >> 8) & 0xFF
+    cs.bytecode[len(cs.bytecode) - 2] = name_idx & 0xFF
+    cs.bytecode[len(cs.bytecode) - 1] = variant_count
+
+    # Store enum in global
+    declare_global(cs, name)
+    let idx = add_const(cs, name)
+    emit_u16(cs, OP_STORE_GLOBAL, idx)
+
+# ── compile try ──────────────────────────────────────────────────────
+def compile_try(cs, node):
+    let children = node.children
+    # Simplified: just compile the try body
+    let i = 0
+    while i < len(children):
+        let child = children[i]
+        if isinstance(child, list):
+            break
+        compile_stmt(cs, child)
+        i = i + 1
+
+# ── helper: split dot notation ──────────────────────────────────────
+def split_dot(name):
+    let parts = []
+    let current = ""
+    let i = 0
+    while i < len(name):
+        if name[i] == ".":
+            if current != "":
+                parts = parts + [current]
+            current = ""
+        else:
+            current = current + name[i]
+        i = i + 1
+    if current != "":
+        parts = parts + [current]
+    return parts
+
+# ── entry point ──────────────────────────────────────────────────────
+def compile_program(ast):
+    let cs = compiler_new()
+    let i = 0
+    while i < len(ast):
+        compile_stmt(cs, ast[i])
+        i = i + 1
+    emit_byte(cs, OP_HALT)
+    return BytecodeModule("main", cs.bytecode, cs.constants, cs.functions, cs.globals)
