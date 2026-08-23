@@ -1,4 +1,10 @@
-# ⚡ Externum
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=externum&fontSize=32&animation=fadeIn" width="100%" />
+
+<div align="center">
+
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=Programming%20language%20%E2%80%94%20compiles%20to%20Python%2C%20Bash%2C%20binary.%20192%20tests%2C%20browser%20REPL%2C%20DRM%2C%20ownership%2Btraits%20hard%20mode)](https://github.com/BartoszOsiej/externum)
+
+</div># ⚡ Externum
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
