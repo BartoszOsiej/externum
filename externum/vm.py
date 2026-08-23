@@ -17,181 +17,242 @@ Executes compiled BytecodeModule objects.  Supports:
   - Structs and enums (algebraic data types)
 """
 
-import io
-import itertools
+import itertools as _itertools
 import queue
 import sys
 import threading
-import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .bytecode import (
-    BytecodeModule, BytecodeFunction,
-    NOP, HALT, RETURN, YIELD_VAL,
-    LOAD_CONST, LOAD_VAR, STORE_VAR, STORE_MUT, LOAD_GLOBAL, STORE_GLOBAL,
-    POP, DUP, SWAP,
-    ADD, SUB, MUL, DIV, MOD, POW, FLOOR_DIV, NEG, NOT,
-    BITAND, BITOR, BITXOR, BITNOT, LSHIFT, RSHIFT,
-    EQ, NEQ, LT, GT, LTE, GTE, AND, OR, IN_OP, IS_OP,
-    JUMP, JUMP_IF, JUMP_IF_NOT, JUMP_IF_POP,
-    CALL, CALL_KW, MAKE_FN, MAKE_CLASS,
-    GET_ATTR, SET_ATTR, GET_INDEX, SET_INDEX,
-    MAKE_LIST, MAKE_DICT, MAKE_TUPLE, MAKE_SET, UNPACK, SLICE,
-    FOR_ITER, LOOP_BREAK,
-    TRY_BEGIN, TRY_END, RAISE_OP, POP_EXCEPT,
-    IMPORT, ALLOC, FREE, LOAD_DEREF, STORE_DEREF,
-    SPAWN, CHAN_CREATE, CHAN_SEND, CHAN_RECV,
-    MAKE_STRUCT, STRUCT_INIT, GET_FIELD, SET_FIELD,
-    MAKE_ENUM, ENUM_VARIANT, ENUM_IS, ENUM_UNWRAP,
-    PIPE_CALL, AWAIT_OP, DEFER_PUSH,
-    OPTION_SOME, OPTION_NONE, RESULT_OK, RESULT_ERR,
-    ASSERT_EQ, PANIC, UNREACHABLE, TRACE_OP, DBG_OP,
+    ADD,
+    ALLOC,
+    AND,
+    ASSERT_EQ,
+    AWAIT_OP,
+    BITAND,
+    BITNOT,
+    BITOR,
+    BITXOR,
+    CALL,
+    DBG_OP,
+    DEFER_PUSH,
+    DIV,
+    DUP,
+    ENUM_IS,
+    ENUM_UNWRAP,
+    ENUM_VARIANT,
+    EQ,
+    FLOOR_DIV,
+    FOR_ITER,
+    FREE,
+    GET_ATTR,
+    GET_INDEX,
+    GT,
+    GTE,
+    HALT,
+    IMPORT,
+    IN_OP,
     INTRINSIC,
+    IS_OP,
+    JUMP,
+    JUMP_IF,
+    JUMP_IF_NOT,
+    JUMP_IF_POP,
+    LOAD_CONST,
+    LOAD_DEREF,
+    LOAD_GLOBAL,
+    LOAD_VAR,
+    LOOP_BREAK,
+    LSHIFT,
+    LT,
+    LTE,
+    MAKE_CLASS,
+    MAKE_DICT,
+    MAKE_ENUM,
+    MAKE_FN,
+    MAKE_LIST,
+    MAKE_SET,
+    MAKE_STRUCT,
+    MAKE_TUPLE,
+    MOD,
+    MUL,
+    NEG,
+    NEQ,
+    NOP,
+    NOT,
+    OPTION_NONE,
+    OPTION_SOME,
+    OR,
+    PANIC,
+    PIPE_CALL,
+    POP,
+    POP_EXCEPT,
+    POW,
+    RAISE_OP,
+    RESULT_ERR,
+    RESULT_OK,
+    RETURN,
+    RSHIFT,
+    SET_ATTR,
+    SET_INDEX,
+    STORE_DEREF,
+    STORE_GLOBAL,
+    STORE_MUT,
+    STORE_VAR,
+    SUB,
+    SWAP,
+    TRACE_OP,
+    TRY_BEGIN,
+    TRY_END,
+    UNPACK,
+    UNREACHABLE,
+    YIELD_VAL,
+    BytecodeFunction,
+    BytecodeModule,
 )
-
-import itertools as _itertools
-
 
 # ── objects ──────────────────────────────────────────────────────────
 
+
 class ExternumObject:
     """Base class for Externum heap objects."""
-    pass
 
 
 class ExternumStruct(ExternumObject):
-    __slots__ = ('__typename', '__fields')
+    __slots__ = ("__fields", "__typename")
 
     def __init__(self, typename: str, fields: dict):
-        object.__setattr__(self, '__typename', typename)
-        object.__setattr__(self, '__fields', fields)
+        object.__setattr__(self, "__typename", typename)
+        object.__setattr__(self, "__fields", fields)
 
     def __getattr__(self, name):
-        fields = object.__getattribute__(self, '__fields')
+        fields = object.__getattribute__(self, "__fields")
         if name in fields:
             return fields[name]
         raise AttributeError(f"struct `{object.__getattribute__(self, '__typename')}` has no field `{name}`")
 
     def __setattr__(self, name, value):
-        fields = object.__getattribute__(self, '__fields')
+        fields = object.__getattribute__(self, "__fields")
         fields[name] = value
 
     def __repr__(self):
-        tn = object.__getattribute__(self, '__typename')
-        fields = object.__getattribute__(self, '__fields')
-        fs = ', '.join(f'{k}={v!r}' for k, v in fields.items())
-        return f'{tn}({fs})'
+        tn = object.__getattribute__(self, "__typename")
+        fields = object.__getattribute__(self, "__fields")
+        fs = ", ".join(f"{k}={v!r}" for k, v in fields.items())
+        return f"{tn}({fs})"
 
 
 class ExternumEnum(ExternumObject):
-    __slots__ = ('__typename', '__variant', '__data')
+    __slots__ = ("__data", "__typename", "__variant")
 
     def __init__(self, typename: str, variant: str, data: Any = None):
-        object.__setattr__(self, '__typename', typename)
-        object.__setattr__(self, '__variant', variant)
-        object.__setattr__(self, '__data', data)
+        object.__setattr__(self, "__typename", typename)
+        object.__setattr__(self, "__variant", variant)
+        object.__setattr__(self, "__data", data)
 
     @property
     def variant(self):
-        return object.__getattribute__(self, '__variant')
+        return object.__getattribute__(self, "__variant")
 
     @property
     def data(self):
-        return object.__getattribute__(self, '__data')
+        return object.__getattribute__(self, "__data")
 
     def __repr__(self):
-        tn = object.__getattribute__(self, '__typename')
-        v = object.__getattribute__(self, '__variant')
-        d = object.__getattribute__(self, '__data')
+        tn = object.__getattribute__(self, "__typename")
+        v = object.__getattribute__(self, "__variant")
+        d = object.__getattribute__(self, "__data")
         if d is not None:
-            return f'{tn}.{v}({d!r})'
-        return f'{tn}.{v}'
+            return f"{tn}.{v}({d!r})"
+        return f"{tn}.{v}"
 
 
 class ExternumResult(ExternumObject):
-    __slots__ = ('_ok', '_value')
+    __slots__ = ("_ok", "_value")
 
     def __init__(self, ok: bool, value: Any):
-        object.__setattr__(self, '_ok', ok)
-        object.__setattr__(self, '_value', value)
+        object.__setattr__(self, "_ok", ok)
+        object.__setattr__(self, "_value", value)
 
     @property
     def is_ok(self):
-        return object.__getattribute__(self, '_ok')
+        return object.__getattribute__(self, "_ok")
 
     @property
     def value(self):
-        return object.__getattribute__(self, '_value')
+        return object.__getattribute__(self, "_value")
 
     def unwrap(self):
-        if not object.__getattribute__(self, '_ok'):
-            raise RuntimeError(f'unwrap on Err: {object.__getattribute__(self, "_value")!r}')
-        return object.__getattribute__(self, '_value')
+        if not object.__getattribute__(self, "_ok"):
+            raise RuntimeError(f"unwrap on Err: {object.__getattribute__(self, '_value')!r}")
+        return object.__getattribute__(self, "_value")
 
     def __repr__(self):
-        if object.__getattribute__(self, '_ok'):
-            return f'Ok({object.__getattribute__(self, "_value")!r})'
-        return f'Err({object.__getattribute__(self, "_value")!r})'
+        if object.__getattribute__(self, "_ok"):
+            return f"Ok({object.__getattribute__(self, '_value')!r})"
+        return f"Err({object.__getattribute__(self, '_value')!r})"
 
 
 class ExternumOption(ExternumObject):
-    __slots__ = ('_some', '_value')
+    __slots__ = ("_some", "_value")
 
     def __init__(self, some: bool, value: Any = None):
-        object.__setattr__(self, '_some', some)
-        object.__setattr__(self, '_value', value)
+        object.__setattr__(self, "_some", some)
+        object.__setattr__(self, "_value", value)
 
     @property
     def is_some(self):
-        return object.__getattribute__(self, '_some')
+        return object.__getattribute__(self, "_some")
 
     @property
     def value(self):
-        return object.__getattribute__(self, '_value')
+        return object.__getattribute__(self, "_value")
 
     def unwrap(self):
-        if not object.__getattribute__(self, '_some'):
-            raise RuntimeError('unwrap on None')
-        return object.__getattribute__(self, '_value')
+        if not object.__getattribute__(self, "_some"):
+            raise RuntimeError("unwrap on None")
+        return object.__getattribute__(self, "_value")
 
     def __repr__(self):
-        if object.__getattribute__(self, '_some'):
-            return f'Some({object.__getattribute__(self, "_value")!r})'
-        return 'None'
+        if object.__getattribute__(self, "_some"):
+            return f"Some({object.__getattribute__(self, '_value')!r})"
+        return "None"
 
 
 class ExternumClosure(ExternumObject):
     """A closure wrapping a function with captured upvalues."""
-    __slots__ = ('_fn', '_upvalues')
+
+    __slots__ = ("_fn", "_upvalues")
 
     def __init__(self, fn: BytecodeFunction, upvalues: dict):
-        object.__setattr__(self, '_fn', fn)
-        object.__setattr__(self, '_upvalues', upvalues)
+        object.__setattr__(self, "_fn", fn)
+        object.__setattr__(self, "_upvalues", upvalues)
 
     @property
     def fn(self):
-        return object.__getattribute__(self, '_fn')
+        return object.__getattribute__(self, "_fn")
 
     @property
     def upvalues(self):
-        return object.__getattribute__(self, '_upvalues')
+        return object.__getattribute__(self, "_upvalues")
 
 
 class ExternumBoundMethod(ExternumObject):
     """A bound method wrapping an instance and a closure."""
-    __slots__ = ('_instance', '_closure')
+
+    __slots__ = ("_closure", "_instance")
 
     def __init__(self, instance, closure):
-        object.__setattr__(self, '_instance', instance)
-        object.__setattr__(self, '_closure', closure)
+        object.__setattr__(self, "_instance", instance)
+        object.__setattr__(self, "_closure", closure)
 
     @property
     def instance(self):
-        return object.__getattribute__(self, '_instance')
+        return object.__getattribute__(self, "_instance")
 
     @property
     def closure(self):
-        return object.__getattribute__(self, '_closure')
+        return object.__getattribute__(self, "_closure")
 
 
 class ExternumClass:
@@ -201,26 +262,26 @@ class ExternumClass:
         self.bases = bases or []
 
     def __repr__(self):
-        return f'<class {self.name}>'
+        return f"<class {self.name}>"
 
 
 class ExternumInstance:
     def __init__(self, cls, attrs: dict = None):
-        object.__setattr__(self, '_cls', cls)
-        object.__setattr__(self, 'attrs', attrs or {})
+        object.__setattr__(self, "_cls", cls)
+        object.__setattr__(self, "attrs", attrs or {})
 
     @property
     def __class__(self):
-        return object.__getattribute__(self, '_cls')
+        return object.__getattribute__(self, "_cls")
 
     def __getattr__(self, name):
-        a = object.__getattribute__(self, 'attrs')
+        a = object.__getattribute__(self, "attrs")
         if name in a:
             return a[name]
-        cls = object.__getattribute__(self, '_cls')
-        if hasattr(cls, 'methods') and name in cls.methods:
+        cls = object.__getattribute__(self, "_cls")
+        if hasattr(cls, "methods") and name in cls.methods:
             method = cls.methods[name]
-            if hasattr(method, '__get__'):
+            if hasattr(method, "__get__"):
                 return method.__get__(self, type(self))
             if isinstance(method, ExternumClosure):
                 return ExternumBoundMethod(self, method)
@@ -228,17 +289,17 @@ class ExternumInstance:
         raise AttributeError(f"'{cls.name}' has no attribute '{name}'")
 
     def __setattr__(self, name, value):
-        a = object.__getattribute__(self, 'attrs')
+        a = object.__getattribute__(self, "attrs")
         a[name] = value
 
     def __repr__(self):
-        cls = object.__getattribute__(self, '_cls')
-        a = object.__getattribute__(self, 'attrs')
-        return f'{cls.name}({a!r})'
+        cls = object.__getattribute__(self, "_cls")
+        a = object.__getattribute__(self, "attrs")
+        return f"{cls.name}({a!r})"
 
 
 class ExternumGenerator:
-    def __init__(self, vm: 'VM', fn: BytecodeFunction, args: list, upvalues: dict = None):
+    def __init__(self, vm: "VM", fn: BytecodeFunction, args: list, upvalues: dict = None):
         self._vm = vm
         self._fn = fn
         self._args = args
@@ -264,9 +325,10 @@ _GeneratorSentinel = object()
 
 # ── memory heap ──────────────────────────────────────────────────────
 
+
 class ExternumHeap:
     def __init__(self):
-        self._slots: Dict[int, Any] = {}
+        self._slots: dict[int, Any] = {}
         self._next_id = _itertools.count(1)
 
     def alloc(self, value=None, count=1):
@@ -276,17 +338,17 @@ class ExternumHeap:
 
     def free(self, pid):
         if pid not in self._slots:
-            raise RuntimeError(f'free: invalid or already-freed pointer {pid}')
+            raise RuntimeError(f"free: invalid or already-freed pointer {pid}")
         del self._slots[pid]
 
     def load(self, pid, index=0):
         if pid not in self._slots:
-            raise RuntimeError(f'deref: invalid or freed pointer {pid}')
+            raise RuntimeError(f"deref: invalid or freed pointer {pid}")
         return self._slots[pid][index]
 
     def store(self, pid, value, index=0):
         if pid not in self._slots:
-            raise RuntimeError(f'store: invalid or freed pointer {pid}')
+            raise RuntimeError(f"store: invalid or freed pointer {pid}")
         self._slots[pid][index] = value
 
     def addr(self, value):
@@ -297,9 +359,9 @@ class ExternumHeap:
 
 # ── VM ───────────────────────────────────────────────────────────────
 
+
 class ExternumError(Exception):
     """Runtime error in the Externum VM."""
-    pass
 
 
 class _BreakSignal(Exception):
@@ -319,117 +381,129 @@ class VM:
     """Stack-based virtual machine for EXBC bytecode."""
 
     def __init__(self, stdout=None, stderr=None, argv=None):
-        self._stack: List[Any] = []
-        self._globals: Dict[str, Any] = {}
+        self._stack: list[Any] = []
+        self._globals: dict[str, Any] = {}
         self._heap = ExternumHeap()
         self._stdout = stdout or sys.stdout
         self._stderr = stderr or sys.stderr
         self._argv = argv or []
-        self._modules: Dict[str, BytecodeModule] = {}
-        self._defer_stack: List[List] = []
-        self._channels: Dict[int, queue.Queue] = {}
+        self._modules: dict[str, BytecodeModule] = {}
+        self._defer_stack: list[list] = []
+        self._channels: dict[int, queue.Queue] = {}
         self._thread_counter = _itertools.count(1)
         self._builtin_keys = set()  # track builtins for import filtering
         # Pre-populate builtins
-        self._globals['print'] = self._builtin_print
-        self._globals['input'] = self._builtin_input
-        self._globals['len'] = self._builtin_len
-        self._globals['str'] = self._builtin_str
-        self._globals['int'] = self._builtin_int
-        self._globals['float'] = self._builtin_float
-        self._globals['bool'] = self._builtin_bool
-        self._globals['list'] = self._builtin_list
-        self._globals['dict'] = self._builtin_dict
-        self._globals['tuple'] = self._builtin_tuple
-        self._globals['set'] = self._builtin_set
-        self._globals['range'] = self._builtin_range
-        self._globals['type'] = self._builtin_type
-        self._globals['isinstance'] = self._builtin_isinstance
-        self._globals['repr'] = self._builtin_repr
-        self._globals['id'] = self._builtin_id
-        self._globals['hash'] = self._builtin_hash
-        self._globals['min'] = self._builtin_min
-        self._globals['max'] = self._builtin_max
-        self._globals['sum'] = self._builtin_sum
-        self._globals['abs'] = self._builtin_abs
-        self._globals['round'] = self._builtin_round
-        self._globals['sorted'] = self._builtin_sorted
-        self._globals['enumerate'] = self._builtin_enumerate
-        self._globals['zip'] = self._builtin_zip
-        self._globals['reversed'] = self._builtin_reversed
-        self._globals['chr'] = self._builtin_chr
-        self._globals['ord'] = self._builtin_ord
-        self._globals['hex'] = self._builtin_hex
-        self._globals['oct'] = self._builtin_oct
-        self._globals['bin'] = self._builtin_bin
-        self._globals['open'] = self._builtin_open
-        self._globals['format'] = self._builtin_format
-        self._globals['True'] = True
-        self._globals['False'] = False
-        self._globals['None'] = None
-        
-        self._globals['alloc'] = self._builtin_alloc
-        self._globals['free'] = self._builtin_free
-        self._globals['addr'] = self._builtin_addr
-        self._globals['sizeof'] = self._builtin_sizeof
-        self._globals['chan'] = self._builtin_chan
-        self._globals['send'] = self._builtin_send
-        self._globals['recv'] = self._builtin_recv
-        self._globals['spawn'] = self._builtin_spawn
-        
-        self._globals['Ok'] = lambda v: ExternumResult(True, v)
-        self._globals['Err'] = lambda v: ExternumResult(False, v)
-        self._globals['Some'] = lambda v: ExternumOption(True, v)
-        self._globals['Result'] = type('Result', (), {'Ok': staticmethod(lambda v: ExternumResult(True, v)),
-                                                        'Err': staticmethod(lambda v: ExternumResult(False, v))})
-        self._globals['Option'] = type('Option', (), {'Some': staticmethod(lambda v: ExternumOption(True, v)),
-                                                        'None': staticmethod(lambda: ExternumOption(False, None))})
-        self._globals['panic'] = self._builtin_panic
-        self._globals['dbg'] = self._builtin_dbg
-        self._globals['trace'] = self._builtin_trace
-        self._globals['unreachable'] = lambda: (_ for _ in ()).throw(RuntimeError('unreachable'))
-        self._globals['argv'] = self._argv
-        self._globals['assert_eq'] = self._builtin_assert_eq
-        
+        self._globals["print"] = self._builtin_print
+        self._globals["input"] = self._builtin_input
+        self._globals["len"] = self._builtin_len
+        self._globals["str"] = self._builtin_str
+        self._globals["int"] = self._builtin_int
+        self._globals["float"] = self._builtin_float
+        self._globals["bool"] = self._builtin_bool
+        self._globals["list"] = self._builtin_list
+        self._globals["dict"] = self._builtin_dict
+        self._globals["tuple"] = self._builtin_tuple
+        self._globals["set"] = self._builtin_set
+        self._globals["range"] = self._builtin_range
+        self._globals["type"] = self._builtin_type
+        self._globals["isinstance"] = self._builtin_isinstance
+        self._globals["repr"] = self._builtin_repr
+        self._globals["id"] = self._builtin_id
+        self._globals["hash"] = self._builtin_hash
+        self._globals["min"] = self._builtin_min
+        self._globals["max"] = self._builtin_max
+        self._globals["sum"] = self._builtin_sum
+        self._globals["abs"] = self._builtin_abs
+        self._globals["round"] = self._builtin_round
+        self._globals["sorted"] = self._builtin_sorted
+        self._globals["enumerate"] = self._builtin_enumerate
+        self._globals["zip"] = self._builtin_zip
+        self._globals["reversed"] = self._builtin_reversed
+        self._globals["chr"] = self._builtin_chr
+        self._globals["ord"] = self._builtin_ord
+        self._globals["hex"] = self._builtin_hex
+        self._globals["oct"] = self._builtin_oct
+        self._globals["bin"] = self._builtin_bin
+        self._globals["open"] = self._builtin_open
+        self._globals["format"] = self._builtin_format
+        self._globals["True"] = True
+        self._globals["False"] = False
+        self._globals["None"] = None
+
+        self._globals["alloc"] = self._builtin_alloc
+        self._globals["free"] = self._builtin_free
+        self._globals["addr"] = self._builtin_addr
+        self._globals["sizeof"] = self._builtin_sizeof
+        self._globals["chan"] = self._builtin_chan
+        self._globals["send"] = self._builtin_send
+        self._globals["recv"] = self._builtin_recv
+        self._globals["spawn"] = self._builtin_spawn
+
+        self._globals["Ok"] = lambda v: ExternumResult(True, v)
+        self._globals["Err"] = lambda v: ExternumResult(False, v)
+        self._globals["Some"] = lambda v: ExternumOption(True, v)
+        self._globals["Result"] = type(
+            "Result",
+            (),
+            {
+                "Ok": staticmethod(lambda v: ExternumResult(True, v)),
+                "Err": staticmethod(lambda v: ExternumResult(False, v)),
+            },
+        )
+        self._globals["Option"] = type(
+            "Option",
+            (),
+            {
+                "Some": staticmethod(lambda v: ExternumOption(True, v)),
+                "None": staticmethod(lambda: ExternumOption(False, None)),
+            },
+        )
+        self._globals["panic"] = self._builtin_panic
+        self._globals["dbg"] = self._builtin_dbg
+        self._globals["trace"] = self._builtin_trace
+        self._globals["unreachable"] = lambda: (_ for _ in ()).throw(RuntimeError("unreachable"))
+        self._globals["argv"] = self._argv
+        self._globals["assert_eq"] = self._builtin_assert_eq
+
         # Terminal (curses) builtins for TUI apps
-        self._globals['term_init'] = self._builtin_term_init
-        self._globals['term_cleanup'] = self._builtin_term_cleanup
-        self._globals['term_clear'] = self._builtin_term_clear
-        self._globals['term_refresh'] = self._builtin_term_refresh
-        self._globals['term_size'] = self._builtin_term_size
-        self._globals['term_move'] = self._builtin_term_move
-        self._globals['term_write'] = self._builtin_term_write
-        self._globals['term_color'] = self._builtin_term_color
-        self._globals['term_getkey'] = self._builtin_term_getkey
-        self._globals['term_addstr'] = self._builtin_term_addstr
-        self._globals['term_border'] = self._builtin_term_border
-        self._globals['term_hline'] = self._builtin_term_hline
-        self._globals['term_vline'] = self._builtin_term_vline
-        self._globals['term_getstr'] = self._builtin_term_getstr
-        self._globals['term_attr'] = self._builtin_term_attr
-        self._globals['KEY_ENTER'] = 10
-        self._globals['KEY_BACKSPACE'] = 127
-        self._globals['KEY_ESCAPE'] = 27
-        self._globals['KEY_UP'] = -1
-        self._globals['KEY_DOWN'] = -2
-        self._globals['KEY_LEFT'] = -3
-        self._globals['KEY_RIGHT'] = -4
-        self._globals['KEY_HOME'] = -5
-        self._globals['KEY_END'] = -6
-        self._globals['KEY_PGUP'] = -7
-        self._globals['KEY_PGDOWN'] = -8
-        self._globals['KEY_DELETE'] = -9
-        self._globals['COLOR_BLACK'] = 0
-        self._globals['COLOR_RED'] = 1
-        self._globals['COLOR_GREEN'] = 2
-        self._globals['COLOR_YELLOW'] = 3
-        self._globals['COLOR_BLUE'] = 4
-        self._globals['COLOR_MAGENTA'] = 5
-        self._globals['COLOR_CYAN'] = 6
-        self._globals['COLOR_WHITE'] = 7
-        self._globals['A_BOLD'] = 2097152
-        self._globals['A_UNDERLINE'] = 131072
-        self._globals['A_REVERSE'] = 262144
+        self._globals["term_init"] = self._builtin_term_init
+        self._globals["term_cleanup"] = self._builtin_term_cleanup
+        self._globals["term_clear"] = self._builtin_term_clear
+        self._globals["term_refresh"] = self._builtin_term_refresh
+        self._globals["term_size"] = self._builtin_term_size
+        self._globals["term_move"] = self._builtin_term_move
+        self._globals["term_write"] = self._builtin_term_write
+        self._globals["term_color"] = self._builtin_term_color
+        self._globals["term_getkey"] = self._builtin_term_getkey
+        self._globals["term_addstr"] = self._builtin_term_addstr
+        self._globals["term_border"] = self._builtin_term_border
+        self._globals["term_hline"] = self._builtin_term_hline
+        self._globals["term_vline"] = self._builtin_term_vline
+        self._globals["term_getstr"] = self._builtin_term_getstr
+        self._globals["term_attr"] = self._builtin_term_attr
+        self._globals["KEY_ENTER"] = 10
+        self._globals["KEY_BACKSPACE"] = 127
+        self._globals["KEY_ESCAPE"] = 27
+        self._globals["KEY_UP"] = -1
+        self._globals["KEY_DOWN"] = -2
+        self._globals["KEY_LEFT"] = -3
+        self._globals["KEY_RIGHT"] = -4
+        self._globals["KEY_HOME"] = -5
+        self._globals["KEY_END"] = -6
+        self._globals["KEY_PGUP"] = -7
+        self._globals["KEY_PGDOWN"] = -8
+        self._globals["KEY_DELETE"] = -9
+        self._globals["COLOR_BLACK"] = 0
+        self._globals["COLOR_RED"] = 1
+        self._globals["COLOR_GREEN"] = 2
+        self._globals["COLOR_YELLOW"] = 3
+        self._globals["COLOR_BLUE"] = 4
+        self._globals["COLOR_MAGENTA"] = 5
+        self._globals["COLOR_CYAN"] = 6
+        self._globals["COLOR_WHITE"] = 7
+        self._globals["A_BOLD"] = 2097152
+        self._globals["A_UNDERLINE"] = 131072
+        self._globals["A_REVERSE"] = 262144
         self._builtin_keys = set(self._globals.keys())
 
     # ── main entry ────────────────────────────────────────────────
@@ -437,8 +511,7 @@ class VM:
         self._modules[module.name] = module
         return self._execute(module.bytecode, module.constants, {}, module.functions)
 
-    def run_function(self, fn: BytecodeFunction, args: list,
-                     kwargs: dict = None, upvalues: dict = None) -> Any:
+    def run_function(self, fn: BytecodeFunction, args: list, kwargs: dict = None, upvalues: dict = None) -> Any:
         # Save and restore the stack to avoid corruption during nested calls
         saved_stack = self._stack
         self._stack = []
@@ -453,7 +526,8 @@ class VM:
                 local_vars[name] = val
             local_vars.update(kwargs or {})
             return self._execute(
-                fn.bytecode, fn.constants,
+                fn.bytecode,
+                fn.constants,
                 local_vars,
                 self._modules[list(self._modules.keys())[0]].functions if self._modules else [],
                 fn_name=fn.name,
@@ -463,9 +537,10 @@ class VM:
 
     def run_source(self, source: str) -> Any:
         """Compile source and run it."""
+        from .bytecode import BytecodeCompiler
         from .lexer import Lexer
         from .parser import Parser
-        from .bytecode import BytecodeCompiler
+
         tokens = Lexer(source).tokenize()
         ast = list(Parser(tokens).parse())
         compiler = BytecodeCompiler(ast)
@@ -475,40 +550,41 @@ class VM:
     def _vm_import(self, name: str):
         """Import an Externum module by name, finding .ext files in lib/ etc."""
         import os
+
         if name in self._modules:
             mod = self._modules[name]
-            return type('Module', (), dict(mod.globals))()
+            return type("Module", (), dict(mod.globals))()
         # Search for .ext file
         repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         search_dirs = [
-            os.path.join(repo_root, 'lib'),
+            os.path.join(repo_root, "lib"),
             os.getcwd(),
         ]
-        ext_path = name.replace('.', os.sep) + '.ext'
+        ext_path = name.replace(".", os.sep) + ".ext"
         for d in search_dirs:
             candidate = os.path.join(d, ext_path)
             if os.path.isfile(candidate):
-                with open(candidate, 'r', encoding='utf-8') as fh:
+                with open(candidate, encoding="utf-8") as fh:
                     source = fh.read()
                 # Use the Python transpiler for .ext libs (they were written for it)
                 from .runtime import Runtime as _RT
+
                 rt = _RT(search_roots=[os.path.dirname(candidate)])
                 ns = rt.run(source)
-                mod_ns = {k: v for k, v in ns.items()
-                          if k not in ('__name__', '__file__')}
-                mod_obj = type('Module', (), mod_ns)()
+                mod_ns = {k: v for k, v in ns.items() if k not in ("__name__", "__file__")}
+                mod_obj = type("Module", (), mod_ns)()
                 mod_obj.__dict__.update(mod_ns)
                 return mod_obj
         # Fallback: try Python import
         try:
             return __import__(name)
         except ImportError:
-            raise ExternumError(f'Cannot import {name!r}')
+            raise ExternumError(f"Cannot import {name!r}")
 
     # ── bytecode executor ─────────────────────────────────────────
-    def _execute(self, bytecode: bytearray, constants: list,
-                 local_vars: dict, all_fns: list,
-                 fn_name: str = '<module>') -> Any:
+    def _execute(
+        self, bytecode: bytearray, constants: list, local_vars: dict, all_fns: list, fn_name: str = "<module>"
+    ) -> Any:
         ip = 0
         stack = self._stack
         locals_ = dict(local_vars)
@@ -554,12 +630,8 @@ class VM:
                 elif name in self._globals:
                     stack.append(self._globals[name])
                 else:
-                    raise ExternumError(f'undefined variable `{name}`')
-            elif op == STORE_VAR:
-                idx = _read_u16()
-                name = constants[idx]
-                locals_[name] = stack.pop()
-            elif op == STORE_MUT:
+                    raise ExternumError(f"undefined variable `{name}`")
+            elif op == STORE_VAR or op == STORE_MUT:
                 idx = _read_u16()
                 name = constants[idx]
                 locals_[name] = stack.pop()
@@ -571,7 +643,7 @@ class VM:
                 elif name in locals_:
                     stack.append(locals_[name])
                 else:
-                    raise ExternumError(f'undefined global `{name}`')
+                    raise ExternumError(f"undefined global `{name}`")
             elif op == STORE_GLOBAL:
                 idx = _read_u16()
                 name = constants[idx]
@@ -605,7 +677,7 @@ class VM:
                 stack.append(a % b)
             elif op == POW:
                 b, a = stack.pop(), stack.pop()
-                stack.append(a ** b)
+                stack.append(a**b)
             elif op == FLOOR_DIV:
                 b, a = stack.pop(), stack.pop()
                 stack.append(a // b)
@@ -706,8 +778,8 @@ class VM:
                     stack.append(self.run_function(fn, args))
                 elif isinstance(fn, ExternumClass):
                     instance = ExternumInstance(fn)
-                    if '__init__' in fn.methods:
-                        init_fn = fn.methods['__init__']
+                    if "__init__" in fn.methods:
+                        init_fn = fn.methods["__init__"]
                         if isinstance(init_fn, ExternumClosure):
                             self.run_function(init_fn.fn, [instance] + args, upvalues=init_fn.upvalues)
                         elif isinstance(init_fn, BytecodeFunction):
@@ -715,15 +787,13 @@ class VM:
                     stack.append(instance)
                 elif isinstance(fn, ExternumStruct):
                     # Struct instantiation
-                    typename = object.__getattribute__(fn, '__typename') if hasattr(fn, '__typename') else 'Struct'
-                    fields = object.__getattribute__(fn, '__fields') if hasattr(fn, '__fields') else {}
+                    typename = object.__getattribute__(fn, "__typename") if hasattr(fn, "__typename") else "Struct"
+                    fields = object.__getattribute__(fn, "__fields") if hasattr(fn, "__fields") else {}
                     stack.append(fn)
-                elif isinstance(fn, ExternumResult):
-                    stack.append(fn)
-                elif isinstance(fn, ExternumOption):
+                elif isinstance(fn, ExternumResult) or isinstance(fn, ExternumOption):
                     stack.append(fn)
                 else:
-                    raise ExternumError(f'cannot call {fn!r}')
+                    raise ExternumError(f"cannot call {fn!r}")
 
             elif op == MAKE_FN:
                 idx = _read_u16()
@@ -773,9 +843,7 @@ class VM:
                 idx = _read_u16()
                 name = constants[idx]
                 obj = stack.pop()
-                if isinstance(obj, ExternumStruct):
-                    stack.append(obj.__getattr__(name))
-                elif isinstance(obj, ExternumEnum):
+                if isinstance(obj, ExternumStruct) or isinstance(obj, ExternumEnum):
                     stack.append(obj.__getattr__(name))
                 elif isinstance(obj, dict):
                     stack.append(obj[name])
@@ -828,7 +896,7 @@ class VM:
                 if try_depth == 0:
                     catch_ip = None
             elif op == RAISE_OP:
-                exc = stack.pop() if stack else RuntimeError('raise')
+                exc = stack.pop() if stack else RuntimeError("raise")
                 if isinstance(exc, str):
                     exc = RuntimeError(exc)
                 raise exc
@@ -860,31 +928,38 @@ class VM:
                 field_count = _read_u8()
                 name = constants[name_idx]
                 # Create a callable struct type (not an instance)
-                field_names = [f'field{i}' for i in range(field_count)]
+                field_names = [f"field{i}" for i in range(field_count)]
+
                 def _make_struct_factory(_n=name, _fn=field_names):
                     def _factory(*args):
                         fields = dict(zip(_fn, args))
                         return ExternumStruct(_n, fields)
+
                     return _factory
+
                 stack.append(_make_struct_factory())
             elif op == MAKE_ENUM:
                 name_idx = _read_u16()
                 variant_count = _read_u8()
                 name = constants[name_idx]
+
                 # Create class with dynamic variant access
                 class _EnumMeta(type):
                     def __getattr__(cls, vname):
-                        if vname.startswith('_'):
+                        if vname.startswith("_"):
                             raise AttributeError(vname)
+
                         def factory(v=None):
                             return ExternumEnum(name, vname, v)
+
                         return factory
-                stack.append(_EnumMeta(name, (), {'__qualname__': name}))
+
+                stack.append(_EnumMeta(name, (), {"__qualname__": name}))
             elif op == ENUM_VARIANT:
                 variant_idx = _read_u16()
                 variant = constants[variant_idx]
                 data = stack.pop() if stack else None
-                stack.append(ExternumEnum('<enum>', variant, data))
+                stack.append(ExternumEnum("<enum>", variant, data))
             elif op == ENUM_IS:
                 variant_idx = _read_u16()
                 variant = constants[variant_idx]
@@ -901,7 +976,7 @@ class VM:
                 if callable(fn):
                     stack.append(fn(arg))
                 else:
-                    raise ExternumError(f'pipe: cannot call {fn!r}')
+                    raise ExternumError(f"pipe: cannot call {fn!r}")
             elif op == AWAIT_OP:
                 # Simplified: just return the value
                 pass
@@ -937,61 +1012,62 @@ class VM:
             elif op == ASSERT_EQ:
                 val = stack.pop()
                 if not val:
-                    raise AssertionError(f'assertion failed: {val!r}')
+                    raise AssertionError(f"assertion failed: {val!r}")
 
             elif op == PANIC:
-                msg = stack.pop() if stack else 'panic'
-                raise ExternumError(f'panic: {msg}')
+                msg = stack.pop() if stack else "panic"
+                raise ExternumError(f"panic: {msg}")
             elif op == UNREACHABLE:
-                raise ExternumError('reached unreachable code')
+                raise ExternumError("reached unreachable code")
             elif op == TRACE_OP:
                 val = stack.pop()
-                self._stderr.write(f'[TRACE] {val!r}\n')
+                self._stderr.write(f"[TRACE] {val!r}\n")
             elif op == DBG_OP:
                 val = stack.pop()
-                self._stderr.write(f'[DBG] {val!r} = {val!r}\n')
+                self._stderr.write(f"[DBG] {val!r} = {val!r}\n")
                 stack.append(val)
 
             elif op == IMPORT:
                 name_idx = _read_u16()
                 import_str = constants[name_idx]
+
                 # Parse: 'import X', 'import X, Y, Z', 'from X import Y', 'from X import Y as Z'
                 def _import_to_target(mod_name):
                     """Import a module and return (short_name, module_object)."""
                     mod_obj = self._vm_import(mod_name.strip())
-                    return mod_name.strip().split('.')[0], mod_obj
+                    return mod_name.strip().split(".")[0], mod_obj
 
                 def _store(name, val):
-                    if fn_name != '<module>':
+                    if fn_name != "<module>":
                         locals_[name] = val
                     else:
                         self._globals[name] = val
 
-                if import_str.startswith('import '):
+                if import_str.startswith("import "):
                     raw = import_str[7:].strip()
                     # Handle comma-separated: import os, sys, json
-                    for item in raw.split(','):
+                    for item in raw.split(","):
                         item = item.strip()
                         if not item:
                             continue
                         short, mod_obj = _import_to_target(item)
                         _store(short, mod_obj)
-                elif import_str.startswith('from '):
+                elif import_str.startswith("from "):
                     rest = import_str[5:].strip()
-                    parts = rest.split(' import ')
+                    parts = rest.split(" import ")
                     mod_name = parts[0].strip()
-                    imports = parts[1].strip() if len(parts) > 1 else ''
+                    imports = parts[1].strip() if len(parts) > 1 else ""
                     mod_obj = self._vm_import(mod_name)
-                    for imp in imports.split(','):
+                    for imp in imports.split(","):
                         imp = imp.strip()
-                        if ' as ' in imp:
-                            real, alias = imp.split(' as ')
+                        if " as " in imp:
+                            real, alias = imp.split(" as ")
                             _store(alias.strip(), getattr(mod_obj, real.strip()))
                         else:
                             _store(imp, getattr(mod_obj, imp))
 
             else:
-                raise ExternumError(f'unknown opcode: 0x{op:02x} at ip={ip}')
+                raise ExternumError(f"unknown opcode: 0x{op:02x} at ip={ip}")
 
         return stack.pop() if stack else None
 
@@ -1041,11 +1117,23 @@ class VM:
             return self._builtin_assert_eq(*args)
         # Algebraic type intrinsics
         elif code == 30:  # Result
-            return type('Result', (), {'Ok': staticmethod(lambda v: ExternumResult(True, v)),
-                                       'Err': staticmethod(lambda v: ExternumResult(False, v))})
+            return type(
+                "Result",
+                (),
+                {
+                    "Ok": staticmethod(lambda v: ExternumResult(True, v)),
+                    "Err": staticmethod(lambda v: ExternumResult(False, v)),
+                },
+            )
         elif code == 31:  # Option
-            return type('Option', (), {'Some': staticmethod(lambda v: ExternumOption(True, v)),
-                                       'None': staticmethod(lambda: ExternumOption(False, None))})
+            return type(
+                "Option",
+                (),
+                {
+                    "Some": staticmethod(lambda v: ExternumOption(True, v)),
+                    "None": staticmethod(lambda: ExternumOption(False, None)),
+                },
+            )
         elif code == 32:  # Ok
             return ExternumResult(True, args[0] if args else None)
         elif code == 33:  # Err
@@ -1121,25 +1209,24 @@ class VM:
             return self._builtin_term_getstr(*args)
         elif code == 74:
             return self._builtin_term_attr(*args)
-        raise ExternumError(f'unknown intrinsic: {code}')
+        raise ExternumError(f"unknown intrinsic: {code}")
 
     # ── builtins ────────────────────────────────────────────────────
     def _builtin_print(self, *args, **kwargs):
-        sep = kwargs.get('sep', ' ')
-        end = kwargs.get('end', '\n')
+        sep = kwargs.get("sep", " ")
+        end = kwargs.get("end", "\n")
         text = sep.join(str(a) for a in args) + end
         self._stdout.write(text)
-        return None
 
-    def _builtin_input(self, prompt=''):
+    def _builtin_input(self, prompt=""):
         self._stdout.write(str(prompt))
         self._stdout.flush()
-        return self._stdout.readline().rstrip('\n')
+        return self._stdout.readline().rstrip("\n")
 
     def _builtin_len(self, obj):
         return len(obj)
 
-    def _builtin_str(self, obj=''):
+    def _builtin_str(self, obj=""):
         return str(obj)
 
     def _builtin_int(self, obj=0, base=10):
@@ -1154,7 +1241,7 @@ class VM:
         return bool(obj)
 
     def _builtin_list(self, *args):
-        if args and hasattr(args[0], '__iter__'):
+        if args and hasattr(args[0], "__iter__"):
             return list(args[0])
         return list(args)
 
@@ -1165,7 +1252,7 @@ class VM:
         return tuple(args)
 
     def _builtin_set(self, *args):
-        if args and hasattr(args[0], '__iter__'):
+        if args and hasattr(args[0], "__iter__"):
             return set(args[0])
         return set(args)
 
@@ -1177,12 +1264,22 @@ class VM:
 
     def _builtin_isinstance(self, obj, cls):
         type_map = {
-            'int': int, 'float': float, 'str': str, 'bool': bool,
-            'list': list, 'dict': dict, 'tuple': tuple, 'set': set,
-            self._builtin_int: int, self._builtin_float: float,
-            self._builtin_str: str, self._builtin_bool: bool,
-            self._builtin_list: list, self._builtin_dict: dict,
-            self._builtin_tuple: tuple, self._builtin_set: set,
+            "int": int,
+            "float": float,
+            "str": str,
+            "bool": bool,
+            "list": list,
+            "dict": dict,
+            "tuple": tuple,
+            "set": set,
+            self._builtin_int: int,
+            self._builtin_float: float,
+            self._builtin_str: str,
+            self._builtin_bool: bool,
+            self._builtin_list: list,
+            self._builtin_dict: dict,
+            self._builtin_tuple: tuple,
+            self._builtin_set: set,
         }
         if isinstance(cls, str):
             cls = type_map.get(cls, object)
@@ -1206,7 +1303,7 @@ class VM:
         return max(*args) if args else 0
 
     def _builtin_sum(self, *args):
-        if len(args) == 1 and hasattr(args[0], '__iter__'):
+        if len(args) == 1 and hasattr(args[0], "__iter__"):
             return sum(args[0])
         return sum(args)
 
@@ -1219,7 +1316,7 @@ class VM:
         return round(obj)
 
     def _builtin_sorted(self, *args, **kwargs):
-        if args and hasattr(args[0], '__iter__'):
+        if args and hasattr(args[0], "__iter__"):
             return sorted(args[0], **kwargs)
         return sorted(args, **kwargs)
 
@@ -1250,7 +1347,7 @@ class VM:
     def _builtin_open(self, *args, **kwargs):
         return open(*args, **kwargs)
 
-    def _builtin_format(self, value, fmt=''):
+    def _builtin_format(self, value, fmt=""):
         return format(value, fmt)
 
     def _builtin_alloc(self, value=None, count=1):
@@ -1263,7 +1360,7 @@ class VM:
         return self._heap.addr(value)
 
     def _builtin_sizeof(self, type_name):
-        sizes = {'Int': 8, 'Float': 8, 'Str': 16, 'Bool': 1, 'Ptr': 8}
+        sizes = {"Int": 8, "Float": 8, "Str": 16, "Bool": 1, "Ptr": 8}
         return sizes.get(str(type_name), 8)
 
     def _builtin_chan(self):
@@ -1287,20 +1384,20 @@ class VM:
             return t
         return None
 
-    def _builtin_panic(self, msg='panic'):
-        raise ExternumError(f'panic: {msg}')
+    def _builtin_panic(self, msg="panic"):
+        raise ExternumError(f"panic: {msg}")
 
     def _builtin_dbg(self, value):
-        self._stderr.write(f'[DBG] {value!r}\n')
+        self._stderr.write(f"[DBG] {value!r}\n")
         return value
 
     def _builtin_trace(self, value):
-        self._stderr.write(f'[TRACE] {value!r}\n')
+        self._stderr.write(f"[TRACE] {value!r}\n")
         return value
 
     def _builtin_assert_eq(self, a, b):
         if a != b:
-            raise AssertionError(f'assert_eq failed: {a!r} != {b!r}')
+            raise AssertionError(f"assert_eq failed: {a!r} != {b!r}")
         return True
 
     # ── terminal builtins (curses wrapper) ────────────────────────
@@ -1310,9 +1407,10 @@ class VM:
         """Lazy import of curses module."""
         try:
             import curses
+
             return curses
         except ImportError:
-            raise ExternumError('curses module not available')
+            raise ExternumError("curses module not available")
 
     def _builtin_term_init(self):
         """Initialize curses and return screen."""
@@ -1326,15 +1424,15 @@ class VM:
         screen.nodelay(False)
         screen.scrollok(True)
         # Default color pairs
-        curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)   # status bar
-        curses.init_pair(2, curses.COLOR_GREEN, -1)                  # syntax: keyword
-        curses.init_pair(3, curses.COLOR_CYAN, -1)                   # syntax: string
-        curses.init_pair(4, curses.COLOR_YELLOW, -1)                 # syntax: comment
-        curses.init_pair(5, curses.COLOR_RED, -1)                    # syntax: error
-        curses.init_pair(6, curses.COLOR_MAGENTA, -1)               # syntax: number
+        curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)  # status bar
+        curses.init_pair(2, curses.COLOR_GREEN, -1)  # syntax: keyword
+        curses.init_pair(3, curses.COLOR_CYAN, -1)  # syntax: string
+        curses.init_pair(4, curses.COLOR_YELLOW, -1)  # syntax: comment
+        curses.init_pair(5, curses.COLOR_RED, -1)  # syntax: error
+        curses.init_pair(6, curses.COLOR_MAGENTA, -1)  # syntax: number
         curses.init_pair(7, curses.COLOR_BLACK, curses.COLOR_GREEN)  # mode indicator
-        curses.init_pair(8, curses.COLOR_WHITE, curses.COLOR_RED)    # error bar
-        curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_YELLOW) # warning
+        curses.init_pair(8, curses.COLOR_WHITE, curses.COLOR_RED)  # error bar
+        curses.init_pair(9, curses.COLOR_BLACK, curses.COLOR_YELLOW)  # warning
         curses.init_pair(10, curses.COLOR_BLACK, curses.COLOR_CYAN)  # info
         self._curses_screen = screen
         return screen
@@ -1381,7 +1479,7 @@ class VM:
         if self._curses_screen:
             try:
                 self._curses_screen.addstr(str(text))
-            except curses.error:
+            except Exception:
                 pass  # write at bottom-right corner
 
     def _builtin_term_addstr(self, row, col, text, attr=0):
@@ -1396,7 +1494,7 @@ class VM:
                     self._curses_screen.addstr(row, col, str(text), attr)
                 else:
                     self._curses_screen.addstr(row, col, str(text))
-            except curses.error:
+            except Exception:
                 pass
 
     def _builtin_term_color(self, fg, bg=-1):
@@ -1424,11 +1522,16 @@ class VM:
             key = self._curses_screen.getch()
             # Map curses special keys to Externum key constants
             key_map = {
-                curses.KEY_UP: -1, curses.KEY_DOWN: -2,
-                curses.KEY_LEFT: -3, curses.KEY_RIGHT: -4,
-                curses.KEY_HOME: -5, curses.KEY_END: -6,
-                curses.KEY_PPAGE: -7, curses.KEY_NPAGE: -8,
-                curses.KEY_DC: -9, curses.KEY_BACKSPACE: 127,
+                curses.KEY_UP: -1,
+                curses.KEY_DOWN: -2,
+                curses.KEY_LEFT: -3,
+                curses.KEY_RIGHT: -4,
+                curses.KEY_HOME: -5,
+                curses.KEY_END: -6,
+                curses.KEY_PPAGE: -7,
+                curses.KEY_NPAGE: -8,
+                curses.KEY_DC: -9,
+                curses.KEY_BACKSPACE: 127,
             }
             return key_map.get(key, key)
         return -1
@@ -1438,7 +1541,9 @@ class VM:
         curses = self._get_curses()
         if self._curses_screen:
             if chars:
-                self._curses_screen.border(*chars) if isinstance(chars, (list, tuple)) and len(chars) >= 8 else self._curses_screen.border()
+                self._curses_screen.border(*chars) if isinstance(chars, (list, tuple)) and len(
+                    chars
+                ) >= 8 else self._curses_screen.border()
             else:
                 self._curses_screen.border()
 
@@ -1448,7 +1553,7 @@ class VM:
         if self._curses_screen:
             try:
                 self._curses_screen.hline(row, col, ord(char) if isinstance(char, str) else char, length)
-            except curses.error:
+            except Exception:
                 pass
 
     def _builtin_term_vline(self, row, col, char, length):
@@ -1457,19 +1562,19 @@ class VM:
         if self._curses_screen:
             try:
                 self._curses_screen.vline(row, col, ord(char) if isinstance(char, str) else char, length)
-            except curses.error:
+            except Exception:
                 pass
 
-    def _builtin_term_getstr(self, prompt=''):
+    def _builtin_term_getstr(self, prompt=""):
         """Read a string with prompt (line input)."""
         curses = self._get_curses()
         if self._curses_screen:
             curses.echo()
             self._curses_screen.addstr(prompt)
             try:
-                result = self._curses_screen.getstr().decode('utf-8', errors='replace')
-            except curses.error:
-                result = ''
+                result = self._curses_screen.getstr().decode("utf-8", errors="replace")
+            except Exception:
+                result = ""
             curses.noecho()
             return result
-        return ''
+        return ""

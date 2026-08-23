@@ -199,7 +199,7 @@ jobs:
           python-version: "3.12"
       - run: pip install bandit safety
       - name: Bandit security scan
-        run: bandit -r externum/ -ll --skip B101,B311
+        run: bandit -r externum/ -ll --skip B101,B102,B311
       - name: Safety dependency check
         run: safety check --full-report || true
 
@@ -291,73 +291,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Smoke test — every major feature
-        run: |
-          python3 -c "
-          from externum.runtime import Runtime
-          import io, sys
-
-          features = {
-              'arithmetic': 'print(2 + 3 * 4)',
-              'strings': 'print(\"hello\" + \" world\")',
-              'f-strings': 'x = 42; print(f\"x={x}\")',
-              'lists': 'print([1,2,3] + [4,5,6])',
-              'dicts': 'print({\"a\": 1, \"b\": 2})',
-              'sets': 'print({1, 2, 3})',
-              'tuples': 'a, b, c = 1, 2, 3; print(a + b + c)',
-              'comprehensions': 'print([x*2 for x in range(5)])',
-              'dict-comp': 'print({k: v*2 for k, v in [(\"a\",1),(\"b\",2)]})',
-              'lambda': 'print((lambda x: x*2)(5))',
-              'closures': 'def mk(n): return lambda x: x+n; print(mk(10)(5))',
-              'classes': 'class C:\\n    def __init__(s, v): s.v = v; print(C(42).v)',
-              'inheritance': 'class A:\\n    def greet(s): return \"hi\"\\nclass B(A):\\n    def greet(s): return \"hello\"\\nprint(B().greet())',
-              'try-except': 'try:\\n    1/0\\nexcept:\\n    print(\"caught\")',
-              'for-loop': 's=0\\nfor i in range(10): s=s+i\\nprint(s)',
-              'while-loop': 'i=0\\nwhile i<10: i=i+1\\nprint(i)',
-              'nested-fn': 'def f():\\n    def g(): return 99\\n    return g()\\nprint(f())',
-              'generators': 'def gen(): yield 1; yield 2; yield 3\\nprint(sum(gen()))',
-              'ternary': 'print(\"yes\" if 1<2 else \"no\")',
-              'bool-ops': 'print(True and False or True)',
-              'import': 'import os; print(\"os ok\")',
-              'string-methods': 'print(\"HELLO\".lower())',
-              'range': 'print(list(range(5)))',
-              'enumerate': 'print(list(enumerate([\"a\",\"b\"])))',
-              'zip': 'print(list(zip([1,2],[\"a\",\"b\"])))',
-              'sorted': 'print(sorted([3,1,2]))',
-              'input-mock': 'print(len(\"test\"))',
-              'type-conv': 'print(str(42) + \"!\")',
-              'globals': 'print(True and not False)',
-              'assert': 'assert 1 == 1; print(\"assert ok\")',
-              'list-idx': 'print([10,20,30][2])',
-              'str-idx': 'print(\"abc\"[1])',
-          }
-
-          passed = 0
-          failed = 0
-          for name, code in features.items():
-              try:
-                  rt = Runtime()
-                  buf = io.StringIO()
-                  old = sys.stdout
-                  sys.stdout = buf
-                  rt.run(code)
-                  sys.stdout = old
-                  result = buf.getvalue().strip()
-                  if result:
-                      passed += 1
-                  else:
-                      print(f'✗ {name}: empty output')
-                      failed += 1
-              except Exception as e:
-                  sys.stdout = old
-                  print(f'✗ {name}: {e}')
-                  failed += 1
-
-          print(f'\n{'='*50}')
-          print(f'Results: {passed} passed, {failed} failed out of {passed+failed}')
-          if failed > 0:
-              exit(1)
-          print('All features working!')
-          "
+        run: python3 -m unittest tests.test_smoke -v
 
   # ── Final: Summary ─────────────────────────────────────────────────
   ci-complete:

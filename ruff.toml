@@ -1,0 +1,70 @@
+# Externum — ruff configuration
+line-length = 120
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "BLE", "S"]
+ignore = [
+    # Python uses snake_case for functions — this is standard
+    "N802",
+    # Blind except is intentional in CLI boundary / REPL
+    "BLE001",
+    # Mutable class defaults are intentional for VM builtins
+    "RUF012",
+    # Implicit Optional is intentional for Externum's flexible typing
+    "RUF013",
+    # exec is needed for Python transpiler runtime
+    "S102",
+    # try-except-pass is intentional for cleanup handlers
+    "S110",
+    # Whitespace in blank lines is harmless
+    "W293",
+    "W291",
+    # Duplicate keys in dict literals are used for fallthrough / defaults
+    "F601",
+    # Unused variables in complex VM/compiler code
+    "F841",
+    # Line length — we allow longer lines for readability
+    "E501",
+    # zip without strict is fine for our use cases
+    "B905",
+    # Exception naming convention
+    "N818",
+    # Collection concatenation with + is intentional
+    "RUF005",
+    # suppressible-exception (contextlib.suppress) is a style choice
+    "SIM105",
+    # raise without from is fine in our error handlers
+    "B904",
+    # duplicate isinstance is intentional for type mapping
+    "SIM101",
+    # needless bool is a style choice
+    "SIM103",
+    # unused loop variable is sometimes intentional
+    "B007",
+    # camelCase imported as constant (e.g. Result, Option)
+    "N814",
+    # unnecessary iterable allocation — readability over perf
+    "RUF015",
+    # unsorted __all__ — not critical
+    "RUF022",
+    # hardcoded passwords are test/DRM secrets
+    "S105",
+    "S107",
+    # collapsible if is a style choice
+    "SIM102",
+    # ternary vs if/else is a style choice
+    "SIM108",
+    # compare with tuple is a style choice
+    "SIM109",
+]
+
+[lint.per-file-ignores]
+# Tests can be more relaxed
+"tests/*" = ["S101", "S102", "BLE001", "F841"]
+# VM builtins legitimately use exec/eval patterns
+"externum/vm.py" = ["F841", "F601", "B023"]
+# Runtime transpiler uses exec
+"externum/runtime/*" = ["S102", "BLE001"]
+# CLI boundary
+"externum/__main__.py" = ["BLE001"]
