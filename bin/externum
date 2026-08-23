@@ -23,11 +23,11 @@ from externum.vm import VM
 from externum.lexer import Lexer
 from externum.parser import Parser
 from externum.bytecode import BytecodeCompiler
+from externum.analysis import preprocess, check_or_raise
 
 
 def _compile_source(source: str, module_name: str = '<bootstrap>'):
     """Compile Externum source to a BytecodeModule."""
-    from externum.analysis import preprocess
     processed, _ = preprocess(source)
     tokens = Lexer(processed).tokenize()
     ast = list(Parser(tokens).parse())
@@ -133,7 +133,6 @@ def main(argv=None):
             print("Error: externum check requires a file", file=sys.stderr)
             sys.exit(1)
         source = _read_file(args[0])
-        from externum.analysis import preprocess, check_or_raise
         from externum.parser import Parser as P
         from externum.lexer import Lexer as L
         processed, _ = preprocess(source)
