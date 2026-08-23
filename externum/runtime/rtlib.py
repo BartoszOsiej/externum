@@ -1,6 +1,6 @@
-"""Externum NV2.0 runtime support library.
+"""Externum runtime support library.
 
-Provides the `_ext_*` helpers that the compiler emits for hard-mode
+Provides the `_ext_*` helpers that the compiler emits
 constructs (manual memory management, pointer dereference, concurrency,
 traits/impls, match). These are injected into the execution namespace of
 every compiled program, so `.ext` code can use `alloc`, `free`, `@p`,

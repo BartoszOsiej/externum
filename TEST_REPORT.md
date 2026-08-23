@@ -7,10 +7,10 @@
 
 **✅ 167 tests · 0 failed · 0.3 s** — lexer, parser, compiler and runtime
 conformance suites (`tests/test_externum.py`, `tests/test_extra.py`),
-plus the NV2.0 hard-mode suite (`tests/test_hardmode.py`, 31 tests) and the
+plus the hard-mode suite (`tests/test_hardmode.py`, 31 tests) and the
 DRM suite (`tests/test_drm.py`, 16 tests).
 
-## NV2.0 — Hard mode (`--hard`)
+## Hard mode (`--hard`)
 
 - **Macros** — expansion in expressions/statements, wrong-arg-count and
   zero-param macros, definitions stripped from the compiled output.
@@ -28,7 +28,7 @@ DRM suite (`tests/test_drm.py`, 16 tests).
 - **Esoteric operators** — `≠`, `≈`, `←`.
 - **Concurrency** — `spawn`/`chan`/`send`/`recv` round-trip.
 
-## NV2.0 — DRM (`--protect`)
+## DRM (`--protect`)
 
 - **License keys** — make/verify, wrong secret rejected, tampered key
   rejected, expired rejected, garbage rejected.

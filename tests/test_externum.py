@@ -44,7 +44,7 @@ class TestLexer(unittest.TestCase):
 
     def test_hex_number(self):
         toks = Lexer("h = 0xFF\n").tokenize()
-        self.assertEqual([t.value for t in toks if t.type == "NUMBER"], [255])
+        self.assertEqual([t.value for t in toks if t.type == "HEX_NUMBER"], [255])
 
     def test_keywords(self):
         src = "class try except finally raise import from as lambda with assert del yield global nonlocal"

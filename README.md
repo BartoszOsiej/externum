@@ -3,7 +3,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
 ![PyPI](https://img.shields.io/badge/PyPI-externum%402.0.0-3776AB?style=flat-square&logo=pypi)
-![Tests](https://img.shields.io/badge/Tests-192%20✓-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-307%20✓-brightgreen?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/BartoszOsiej/externum/badge)](https://securityscorecards.dev/viewer/?uri=github.com/BartoszOsiej/externum)
 [![OpenSSF Best Practices](https://img.shields.io/badge/OpenSSF-Best%20Practices-brightgreen?style=flat-square)](https://www.bestpractices.dev/projects/externum)
@@ -28,7 +28,6 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 - [Example](#example)
 - [Browser Playground & Bot](#browser-playground--bot)
 - [Standard Library](#standard-library)
-- [NV2.0 Hard Mode](#nv20-hard-mode)
 - [DRM System](#drm-system)
 - [Verify](#verify)
 - [Project Structure](#project-structure)
@@ -49,7 +48,7 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 | **Modules** | `import`/`from ... import`, custom `.ext` modules, standard library |
 | **Expressions** | full operator precedence, chained comparisons, bitwise, ternaries, comprehensions, tuple unpacking |
 | **Shell** | inline bash `` `cmd` `` and `%% ... %%` blocks |
-| **Tooling** | REPL, compilation to 3 targets, `argv` |
+| **Tooling** | REPL, compilation to 3 targets, `argv`, TUI IDE |
 
 ---
 
@@ -73,6 +72,10 @@ pip install -e .
 # Run a program
 externum run examples/pokedex.ext
 
+# TUI IDE (written in Externum itself)
+externum ide
+externum ide myprogram.ext
+
 # REPL
 externum repl
 
@@ -87,6 +90,7 @@ externum examples/hello.ext --target bash
 ---
 
 ## Example
+
 
 `examples/pokedex.ext` uses classes with inheritance, comprehensions,
 lambdas, exceptions, generators, f-strings, and the standard library:
@@ -114,7 +118,6 @@ nums = [f for f in fibonacci(10) if f % 2 == 0]
 |------|---------|
 | **REPL** | ![REPL](assets/repl.gif) |
 | **Compile** | ![Compile](assets/compile.gif) |
-| **Hard Mode** | ![Hard Mode](assets/hardmode.gif) |
 
 ---
 
@@ -149,11 +152,8 @@ Extend Externum from GitHub Issues — no local setup needed:
 | `/define <name> <body>` | Add a new stdlib function via PR | `/define clamp(x, lo, hi) if x < lo: return lo ...` |
 
 The bot parses Issue comments, generates a PR with the new function + tests,
-and runs the full 192-test suite before merge. Language evolves through
+and runs the full test suite before merge. Language evolves through
 community contributions.
-
-> 📦 See PR [#8](https://github.com/BartoszOsiej/externum/pull/8) for the
-> merged `/run` + `/define` implementation.
 
 ---
 
@@ -168,22 +168,6 @@ community contributions.
 | `jsonx` | `load`, `load_str`, `dump`, `dump_str` — JSON read/write |
 | `net` | `http_get`, `http_get_status` — HTTP GET with timeout |
 | `drm` | `make_license`, `verify_license`, `sign`, `verify`, `watermark` |
-
----
-
-## NV2.0 Hard Mode
-
-Run with `externum run program.ext --hard` to enable the hardcore ruleset:
-
-- **Mandatory declarations** — every variable needs `x: Type` before use
-- **Static typing** — assignment/return mismatches rejected at compile time
-- **Manual memory** — `alloc(Int)`, `free(p)`, `@p` dereference; ownership enforced
-- **`match`/`case`** — pattern matching with literals, binds, guards
-- **Traits** — `trait X:` + `impl X for Y:`
-- **`unsafe:` blocks** — escape hatch for checks
-- **Macros** — `macro NAME(a, b) { … }` compile-time expansion
-- **Concurrency** — `spawn(f(...))`, `chan()`, `send(ch, v)`, `recv(ch)`
-- **Esoteric operators** — `≠`, `≈`, `←`
 
 ---
 
@@ -209,16 +193,17 @@ EXTERNUM_LICENSE=<key> externum run app.ext --protect --app-id game --author buf
 externum/
 ├── lexer.py          # Tokenization (bracket-aware, bash, f-strings)
 ├── parser.py         # Full grammar → AST
-├── compiler.py       # Codegen → Python / Bash / binary
-├── typesys.py        # NV2.0 type checker
-├── hardmode.py       # NV2.0 macros + hard-mode pipeline
-├── drm.py            # NV2.0 DRM: license, watermark, tamper-detection
+├── bytecode.py       # Bytecode compiler (EXBC format)
+├── compiler.py       # Python/Bash transpiler
+├── vm.py             # Bytecode virtual machine
+├── typesys.py        # Static type checker
+├── drm.py            # DRM: license, watermark, tamper-detection
 ├── runtime/          # Runtime: exec, import .ext, REPL
 └── __main__.py       # CLI (run / repl / compile / keygen)
 lib/                  # Standard library (.ext)
-tools/                # NV-2.0 tooling in Externum
+tools/                # Tooling in Externum
 examples/             # hello, calc, pokedex, hardcore.ext
-tests/                # 192 unit tests
+tests/                # 307 unit tests
 WIKI.md               # Language specification
 ```
 
@@ -227,7 +212,7 @@ WIKI.md               # Language specification
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 192 tests
+python3 -m unittest discover -s tests -v   # 307 tests
 ```
 
 ---
@@ -269,5 +254,3 @@ Because most languages force you to choose: readable or fast, scripting or syste
 ## License
 
 MIT
-
----

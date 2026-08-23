@@ -1,4 +1,4 @@
-"""Externum NV2.0 — DRM (defense in depth).
+"""Externum — DRM (defense in depth).
 
 Every compiled artifact can carry the full protection stack:
 
@@ -106,7 +106,7 @@ def protect_python(code: str, app_id: str, author: str, source: str,
 
     header = (
         '# ============================================================\n'
-        '# Externum :: NV2.0 :: protected build\n'
+        '# Externum :: protected build\n'
         f'#   app_id : {app_id}\n'
         f'#   author : {author}\n'
         f'#   build  : {build_id}\n'
@@ -150,7 +150,7 @@ def _ext_drm_self_check():
         # __file__ at the .ext source (no header -> check skipped). The
         # two-line sequence never occurs inside the guard itself, so it
         # cannot self-match.
-        m = list(_re.finditer(rb'# ={{10,}}\\n# Externum :: NV2.0 :: protected build', blob))
+        m = list(_re.finditer(rb'# ={{10,}}\\n# Externum :: protected build', blob))
         if m:
             blob = blob[m[-1].start():]
             call = blob.rfind(b'_ext_drm_self_check()')

@@ -26,7 +26,7 @@ _PRECEDENCE = {
     '||': 1, 'OR': 1,
     '&&': 2, 'AND': 2,
     '==': 4, '!=': 4, '<': 4, '>': 4, '<=': 4, '>=': 4, 'IS': 4, 'IN': 4,
-    # NV2.0 esoteric comparison operators: ≈ (eq), ≠ (neq)
+    
     'EQ': 4, 'NEQ': 4,
     '|': 5, '^': 6, '&': 7,
     '<<': 8, '>>': 8,
@@ -43,9 +43,12 @@ _OP_TYPES = {
 
 # Token values/types that are not valid Python operators.
 _OP_TO_PY = {'&&': 'and', '||': 'or', 'AND': 'and', 'OR': 'or', 'IS': 'is', 'IN': 'in',
-              'EQ': '==', 'NEQ': '!='}
+              'EQ': '==', 'NEQ': '!=', 'PIPE': '|>'}
 
-# Type names usable in annotations (checked in hard mode).
+# Pipe operator has the lowest precedence
+_PRECEDENCE['PIPE'] = 0
+
+# Type names usable in annotations.
 KNOWN_TYPES = {'Int', 'Float', 'Str', 'Bool', 'Void', 'Any', 'Ptr', 'List', 'Dict', 'Optional'}
 
 # Strip type annotations from parameter lists: `n: Int` -> `n`,
@@ -62,7 +65,7 @@ class Parser:
         self.pos = 0
         self.ast: List[ASTNode] = []
         self._comp_depth = 0  # inside a comprehension -> no ternary
-        # NV2.0 hard-mode metadata captured during parsing
+        
         self.annotations: dict = {}   # variable name -> type string
         self.mutable: set = set()      # variable names declared `mut` (reassignable)
         self.signatures: dict = {}    # function name -> {params: [(name, type)], ret: type}
@@ -85,6 +88,26 @@ class Parser:
     def _parse_statement(self) -> ASTNode:
         tok = self.tokens[self.pos]
         t = tok.type
+        if t == 'STRUCT':
+            return self._parse_struct_def()
+        if t == 'ENUM':
+            return self._parse_enum_def()
+        if t == 'MOD':
+            # Distinguish 'mod name:' (module def) from 'mod: Any = ...' (annotated var)
+            if self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1].type == 'COLON':
+                pass  # fall through to expression/assignment handling
+            else:
+                return self._parse_mod_def()
+        if t == 'CONST':
+            return self._parse_const_def()
+        if t == 'STATIC':
+            return self._parse_static_def()
+        if t == 'LOOP':
+            return self._parse_loop_stmt()
+        if t == 'DEFER':
+            return self._parse_defer_stmt()
+        if t == 'TYPE':
+            return self._parse_type_alias()
         if t == 'BASH_BLOCK':
             self.pos += 1
             return ASTNode('BASH_BLOCK', value=tok.value)
@@ -160,7 +183,7 @@ class Parser:
         return self._parse_assignment_or_expr()
 
     def _parse_assignment_or_expr(self) -> ASTNode:
-        # NV2.0 `mut` binding:  mut x: Int = 5   (reassignable, Rust-style)
+        
         if (self.pos < len(self.tokens) and self.tokens[self.pos].type == 'MUT'
                 and self.pos + 1 < len(self.tokens)
                 and self.tokens[self.pos + 1].type in ('IDENTIFIER', 'BUILTIN')):
@@ -181,7 +204,7 @@ class Parser:
                                children=[ASTNode('TYPE', value=ann or 'Any')])
         expr = self._parse_expression()
         if self.pos < len(self.tokens):
-            # NV2.0 annotated declaration: `x: Int` or `x: Int = 5`
+            
             if expr.type == 'IDENTIFIER' and self.tokens[self.pos].type == 'COLON':
                 self.pos += 1
                 ann = self._parse_type_annotation()
@@ -269,7 +292,7 @@ class Parser:
         return ASTNode('CLASS', value=name,
                        children=[ASTNode('PARAMS', value=bases)] + body)
 
-    # ---------------------------------------------------- NV2.0 strict stmts
+    # strict statements
     def _parse_match_stmt(self) -> ASTNode:
         """match EXPR:  case PATTERN [if GUARD]: BODY ..."""
         self.pos += 1  # MATCH
@@ -544,6 +567,184 @@ class Parser:
         raw = re.sub(r'\s+', ' ', ''.join(parts)).strip()
         return ASTNode('IMPORT', value=raw)
 
+    # v4 statements
+    def _parse_struct_def(self) -> ASTNode:
+        """struct NAME { field: Type, ... } or struct NAME: field = val, ..."""
+        self.pos += 1  # STRUCT
+        name = self.tokens[self.pos].value
+        self.pos += 1
+        fields = []
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'LBRACE':
+            self.pos += 1
+            while self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RBRACE':
+                tok = self.tokens[self.pos]
+                if tok.type in ('IDENTIFIER', 'BUILTIN'):
+                    field_name = tok.value
+                    self.pos += 1
+                    field_type = 'Any'
+                    if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'COLON':
+                        self.pos += 1
+                        field_type = self._parse_type_annotation() or 'Any'
+                    fields.append(ASTNode('FIELD', value=field_name, children=[ASTNode('TYPE', value=field_type)]))
+                elif tok.type == 'COMMA':
+                    self.pos += 1
+                elif tok.type == 'NEWLINE':
+                    self.pos += 1
+                else:
+                    self.pos += 1
+            if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'RBRACE':
+                self.pos += 1
+        elif self.pos < len(self.tokens) and self.tokens[self.pos].type == 'COLON':
+            self.pos += 1
+            body = self._parse_block()
+            for child in body:
+                if child.type == 'DECLARE' or child.type == 'ASSIGN':
+                    fname = child.value if child.value else (child.children[0].value if child.children and child.children[0].type == 'IDENTIFIER' else '?')
+                    ftype = 'Any'
+                    default = None
+                    for sub in child.children:
+                        if sub.type == 'TYPE':
+                            ftype = sub.value
+                        elif child.type == 'ASSIGN':
+                            default = sub
+                    fields.append(ASTNode('FIELD', value=fname,
+                                         children=[ASTNode('TYPE', value=ftype)] + ([default] if default else [])))
+                elif child.type == 'FIELD':
+                    fields.append(child)
+        return ASTNode('STRUCT', value=name, children=fields)
+
+    def _parse_enum_def(self) -> ASTNode:
+        """enum NAME: Variant or enum NAME { Variant(T), ... }"""
+        self.pos += 1  # ENUM
+        name = self.tokens[self.pos].value
+        self.pos += 1
+        variants = []
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'LBRACE':
+            # brace-style: enum Name { Variant, Variant2(T) }
+            self.pos += 1
+            while self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RBRACE':
+                tok = self.tokens[self.pos]
+                if tok.type in ('IDENTIFIER', 'BUILTIN'):
+                    vname = tok.value
+                    self.pos += 1
+                    data_type = None
+                    if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'LPAREN':
+                        self.pos += 1
+                        data_type = self._parse_type_annotation() or 'Any'
+                        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'RPAREN':
+                            self.pos += 1
+                    variant = ASTNode('VARIANT', value=vname)
+                    if data_type:
+                        variant.children.append(ASTNode('TYPE', value=data_type))
+                    variants.append(variant)
+                elif tok.type == 'COMMA':
+                    self.pos += 1
+                elif tok.type == 'NEWLINE':
+                    self.pos += 1
+                else:
+                    self.pos += 1
+            if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'RBRACE':
+                self.pos += 1
+        elif self.pos < len(self.tokens) and self.tokens[self.pos].type == 'COLON':
+            # indent-style: enum Name: Variant \n Variant2(T)
+            self.pos += 1
+            body = self._parse_block()
+            for child in body:
+                if child.type == 'IDENTIFIER':
+                    vname = child.value
+                    variant = ASTNode('VARIANT', value=vname)
+                    variants.append(variant)
+                elif child.type in ('DECLARE', 'ASSIGN'):
+                    vname = child.value
+                    variant = ASTNode('VARIANT', value=vname)
+                    variants.append(variant)
+                elif child.type == 'CALL':
+                    vname = child.value
+                    variant = ASTNode('VARIANT', value=vname, children=child.children)
+                    variants.append(variant)
+                elif child.type == 'EXPRESSION':
+                    vname = child.value.split('(')[0].strip() if child.value and '(' in child.value else str(child.value)
+                    variant = ASTNode('VARIANT', value=vname)
+                    variants.append(variant)
+        return ASTNode('ENUM', value=name, children=variants)
+
+    def _parse_mod_def(self) -> ASTNode:
+        """mod NAME: body"""
+        self.pos += 1  # MOD
+        name = self.tokens[self.pos].value
+        self.pos += 1
+        self._skip_to_colon()
+        body = self._parse_block()
+        return ASTNode('MOD', value=name, children=body)
+
+    def _parse_const_def(self) -> ASTNode:
+        """const NAME = expr"""
+        self.pos += 1  # CONST
+        name = self.tokens[self.pos].value
+        self.pos += 1
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'ASSIGN':
+            self.pos += 1
+            val = self._parse_expression()
+            return ASTNode('CONST', value=name, children=[val])
+        return ASTNode('CONST', value=name)
+
+    def _parse_static_def(self) -> ASTNode:
+        """static NAME: Type = expr"""
+        self.pos += 1  # STATIC
+        name = self.tokens[self.pos].value
+        self.pos += 1
+        ann = None
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'COLON':
+            self.pos += 1
+            ann = self._parse_type_annotation()
+        val = None
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'ASSIGN':
+            self.pos += 1
+            val = self._parse_expression()
+        children = []
+        if ann:
+            children.append(ASTNode('TYPE', value=ann))
+        if val:
+            children.append(val)
+        return ASTNode('STATIC', value=name, children=children)
+
+    def _parse_loop_stmt(self) -> ASTNode:
+        """loop: body — infinite loop with optional break val."""
+        self.pos += 1  # LOOP
+        self._skip_to_colon()
+        body = self._parse_block()
+        return ASTNode('LOOP', children=body)
+
+    def _parse_defer_stmt(self) -> ASTNode:
+        """defer: body — execute at scope exit."""
+        self.pos += 1  # DEFER
+        self._skip_to_colon()
+        body = self._parse_block()
+        return ASTNode('DEFER', children=body)
+
+    def _parse_type_alias(self) -> ASTNode:
+        """type Name[T] = expr"""
+        self.pos += 1  # TYPE
+        name = self.tokens[self.pos].value
+        self.pos += 1
+        # optional generic params: [T, U]
+        type_params = []
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'LBRACKET':
+            self.pos += 1
+            while self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RBRACKET':
+                if self.tokens[self.pos].type in ('IDENTIFIER', 'BUILTIN'):
+                    type_params.append(self.tokens[self.pos].value)
+                self.pos += 1
+            if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'RBRACKET':
+                self.pos += 1
+        # = expr
+        val = None
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'ASSIGN':
+            self.pos += 1
+            val = self._parse_expression()
+        return ASTNode('TYPE_ALIAS', value=name,
+                       children=[ASTNode('TYPE_PARAMS', value=type_params)] + ([val] if val else []))
+
     # ---------------------------------------------------------------- blocks
     def _parse_block(self) -> List[ASTNode]:
         nodes = []
@@ -575,7 +776,7 @@ class Parser:
     def _parse_params(self) -> Tuple[str, list]:
         """Parse a parenthesised parameter/bases list and render it cleanly.
         Returns (clean_params, [(name, type_or_None)]) — the second element
-        feeds the hard-mode type checker."""
+        feeds the type checker."""
         self.pos += 1  # LPAREN
         raw_parts = []
         depth = 1
@@ -639,8 +840,9 @@ class Parser:
             self.pos += 1
             right = self._parse_expression(prec + 1)
             op = _OP_TO_PY.get(op_type, op_type)
-            left = ASTNode('EXPRESSION',
-                           value=f'{self._node_to_str(left)} {op} {self._node_to_str(right)}')
+            # BINOP: value=stringified (backward compat), children=[left, op_str, right]
+            left = ASTNode('BINOP', value=f'{self._node_to_str(left)} {op} {self._node_to_str(right)}',
+                           children=[left, ASTNode('OP', value=op), right])
         # ternary:  a if cond else b   (lowest precedence)
         if self._comp_depth == 0 and self.pos < len(self.tokens) and self.tokens[self.pos].type == 'IF':
             self.pos += 1
@@ -649,43 +851,51 @@ class Parser:
             if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'ELSE':
                 self.pos += 1
                 else_expr = self._parse_expression()
-            left = ASTNode('EXPRESSION',
-                           value=f'{self._node_to_str(left)} if {self._node_to_str(cond)} else {self._node_to_str(else_expr)}')
+            left = ASTNode('BINOP',
+                           value=f'{self._node_to_str(left)} if {self._node_to_str(cond)} else {self._node_to_str(else_expr)}',
+                           children=[left, ASTNode('OP', value='if_else'), cond, else_expr])
         return left
 
     def _parse_unary(self) -> ASTNode:
         tok = self.tokens[self.pos]
-        if tok.type == '@':  # NV2.0 pointer dereference: @p
+        if tok.type == '@':  
             self.pos += 1
             return ASTNode('DEREF', children=[self._parse_unary()])
         if tok.type == 'NOT':
             self.pos += 1
             operand = self._parse_unary()
-            return ASTNode('EXPRESSION', value=f'not {self._node_to_str(operand)}')
+            return ASTNode('UNARYOP', value=f'not {self._node_to_str(operand)}',
+                           children=[ASTNode('OP', value='not'), operand])
         if tok.type in ('MINUS', '-') and tok.value == '-':
             self.pos += 1
-            return ASTNode('EXPRESSION', value=f'-{self._node_to_str(self._parse_expression(_UNARY_BIND))}')
+            operand = self._parse_expression(_UNARY_BIND)
+            return ASTNode('UNARYOP', value=f'-{self._node_to_str(operand)}',
+                           children=[ASTNode('OP', value='-'), operand])
         if tok.type in ('PLUS', '+') and tok.value == '+':
             self.pos += 1
-            return ASTNode('EXPRESSION', value=f'+{self._node_to_str(self._parse_expression(_UNARY_BIND))}')
+            operand = self._parse_expression(_UNARY_BIND)
+            return ASTNode('UNARYOP', value=f'+{self._node_to_str(operand)}',
+                           children=[ASTNode('OP', value='+'), operand])
         if tok.type == '~':
             self.pos += 1
-            return ASTNode('EXPRESSION', value=f'~{self._node_to_str(self._parse_expression(_UNARY_BIND))}')
+            operand = self._parse_expression(_UNARY_BIND)
+            return ASTNode('UNARYOP', value=f'~{self._node_to_str(operand)}',
+                           children=[ASTNode('OP', value='~'), operand])
         return self._parse_primary()
 
     def _parse_primary(self) -> ASTNode:
         tok = self.tokens[self.pos]
         t = tok.type
-        if t == 'NUMBER':
+        if t in ('NUMBER', 'BINARY_NUMBER', 'HEX_NUMBER', 'OCTAL_NUMBER'):
             self.pos += 1
             return ASTNode('NUMBER', value=tok.value)
-        if t == 'BINARY_NUMBER':
-            self.pos += 1
-            return ASTNode('BINARY_NUMBER', value=tok.value)
-        if t == 'STRING':
+        if t in ('STRING', 'CHAR'):
             self.pos += 1
             return self._parse_postfix(ASTNode('STRING', value=tok.value))
-        if t in ('IDENTIFIER', 'BUILTIN'):
+        if t in ('IDENTIFIER', 'BUILTIN', 'TYPE', 'OPEN',
+                   'MOD', 'STRUCT', 'ENUM', 'TRAIT', 'IMPL', 'UNSAFE',
+                   'MACRO', 'MUT', 'REF', 'DEREF', 'LOOP', 'CONST',
+                   'STATIC', 'COMPTIME', 'LET', 'MATCH', 'CASE'):
             name = tok.value
             self.pos += 1
             return self._parse_postfix(ASTNode('IDENTIFIER', value=name))
@@ -713,7 +923,7 @@ class Parser:
             tok = self.tokens[self.pos]
             if tok.type == 'DOT':
                 self.pos += 1
-                if self.pos < len(self.tokens) and self.tokens[self.pos].type in ('IDENTIFIER', 'BUILTIN'):
+                if self.pos < len(self.tokens) and self.tokens[self.pos].type in ('IDENTIFIER', 'BUILTIN', 'NONE', 'TRUE', 'FALSE', 'TYPE'):
                     attr = self.tokens[self.pos].value
                     self.pos += 1
                     left = ASTNode('DOT', value=f'{self._node_to_str(left)}.{attr}')
@@ -845,19 +1055,33 @@ class Parser:
         # self.pos is just after LBRACKET
         items = []
         first = None
-        if self.pos < len(self.tokens) and self.tokens[self.pos].type != 'COLON':
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type not in ('COLON', 'COLON_COLON'):
             first = self._parse_expression()
-        if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'COLON':
-            self.pos += 1
-            stop = None
-            if self.pos < len(self.tokens) and self.tokens[self.pos].type not in ('RBRACKET', 'COLON', 'COMMA'):
-                stop = self._parse_expression()
-            step = None
-            if self.pos < len(self.tokens) and self.tokens[self.pos].type == 'COLON':
+        if self.pos < len(self.tokens) and self.tokens[self.pos].type in ('COLON', 'COLON_COLON'):
+            # Handle :: (COLON_COLON) vs :
+            if self.tokens[self.pos].type == 'COLON_COLON':
                 self.pos += 1
-                if self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RBRACKET':
+                stop = None
+                step = None
+                if self.pos < len(self.tokens) and self.tokens[self.pos].type not in ('RBRACKET', 'COMMA'):
                     step = self._parse_expression()
-            items.append(self._render_slice(first, stop, step))
+                items.append(self._render_slice(first, stop, step))
+            else:
+                self.pos += 1
+                stop = None
+                if self.pos < len(self.tokens) and self.tokens[self.pos].type not in ('RBRACKET', 'COLON', 'COLON_COLON', 'COMMA'):
+                    stop = self._parse_expression()
+                step = None
+                if self.pos < len(self.tokens) and self.tokens[self.pos].type in ('COLON', 'COLON_COLON'):
+                    if self.tokens[self.pos].type == 'COLON_COLON':
+                        self.pos += 1
+                        if self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RBRACKET':
+                            step = self._parse_expression()
+                    else:
+                        self.pos += 1
+                        if self.pos < len(self.tokens) and self.tokens[self.pos].type != 'RBRACKET':
+                            step = self._parse_expression()
+                items.append(self._render_slice(first, stop, step))
         else:
             if first is not None:
                 items.append(self._node_to_str(first))
@@ -956,15 +1180,17 @@ class Parser:
         if node is None:
             return 'None'
         t = node.type
-        if t == 'NUMBER':
+        if t in ('NUMBER', 'BINARY_NUMBER', 'HEX_NUMBER', 'OCTAL_NUMBER'):
             return str(node.value)
-        if t == 'BINARY_NUMBER':
-            return f'int("{bin(node.value)[2:]}", 2)'
         if t == 'STRING':
+            return node.value
+        if t == 'CHAR':
             return node.value
         if t == 'IDENTIFIER':
             return node.value
-        if t == 'EXPRESSION':
+        if t in ('EXPRESSION', 'BINOP', 'UNARYOP'):
+            return str(node.value)
+        if t == 'OP':
             return str(node.value)
         if t == 'DEREF':
             return f'@{self._node_to_str(node.children[0]) if node.children else ""}'

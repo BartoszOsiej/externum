@@ -1,14 +1,17 @@
-"""Lexer for Externum v3 — tokenizes the full language.
+"""Lexer for Externum v4 — tokenizes the full language.
 
 Token kinds:
   - structural: NEWLINE, INDENT, DEDENT
-  - literals:   NUMBER, BINARY_NUMBER, STRING, IDENTIFIER
+  - literals:   NUMBER, BINARY_NUMBER, HEX_NUMBER, OCTAL_NUMBER, STRING, IDENTIFIER, CHAR
   - builtins:   BUILTIN (print, input, len, ...)
-  - keywords:   IF ELSE ELIF FOR WHILE DEF CLASS RETURN YIELD IMPORT FROM AS
-                PASS BREAK CONTINUE TRY EXCEPT FINALLY RAISE WITH ASSERT DEL
-                GLOBAL NONLOCAL LAMBDA AND OR NOT IN IS TRUE FALSE NONE SELF
+  - keywords (v3): IF ELSE ELIF FOR WHILE DEF CLASS RETURN YIELD IMPORT FROM AS
+                   PASS BREAK CONTINUE TRY EXCEPT FINALLY RAISE WITH ASSERT DEL
+                   GLOBAL NONLOCAL LAMBDA AND OR NOT IN IS TRUE FALSE NONE SELF
+  - keywords (v4): STRUCT ENUM MOD USE ASYNC AWAIT EFFECT REGION TYPE WHERE
+                   CONST STATIC REF DEREF LOOP DEFER PIPELN COMPTIME LET
+                   MATCH CASE TRAIT IMPL UNSAFE MUT MACRO AND OR NOT IN IS
   - operators:  ** == != <= >= << >> && || += -= *= /= // + - * / % = < > ~ & | ^
-                ( ) [ ] { } , : . ; -> @
+                ( ) [ ] { } , : . ; -> @ ? :: => .. ..= |> !=
   - bash:       BASH_START, BASH_ARG, BASH_FLAG, BASH_END, BASH_BLOCK
 """
 
@@ -29,8 +32,13 @@ class Lexer:
         'continue', 'try', 'except', 'finally', 'raise', 'with',
         'assert', 'del', 'global', 'nonlocal', 'lambda',
         'True', 'False', 'None', 'self', 'and', 'or', 'not', 'in', 'is',
-        # NV2.0 language keywords
+        
         'match', 'case', 'trait', 'impl', 'unsafe', 'macro', 'mut',
+        
+        'struct', 'enum', 'mod', 'use', 'async', 'await',
+        'effect', 'region', 'type', 'where', 'const', 'static',
+        'ref', 'deref', 'loop', 'defer', 'comptime', 'let',
+        'pub', 'priv', 'override', 'open', 'closed', 'sealed',
     }
 
     BUILTINS = {'print', 'input', 'len', 'str', 'int', 'float', 'bool',
@@ -38,26 +46,47 @@ class Lexer:
                 'sum', 'min', 'max', 'abs', 'round', 'enumerate', 'zip',
                 'sorted', 'reversed', 'chr', 'ord', 'hex', 'oct', 'bin',
                 'isinstance', 'repr', 'id', 'hash', 'format',
-                # NV2.0 builtins (manual memory + concurrency + explicit copy)
+                
                 'alloc', 'free', 'addr', 'spawn', 'chan', 'send', 'recv', 'copy',
                 'Ptr', 'Int', 'Float', 'Str', 'Bool', 'Void', 'Any',
                 'List', 'Dict', 'Optional', 'sizeof',
+                
+                'Result', 'Option', 'Some', 'None', 'Ok', 'Err',
+                'panic', 'unreachable', 'todo', 'assert_eq', 'assert_ne',
+                'dbg', 'trace', 'Error', 'Success',
+                'Ref', 'Deref', 'Box', 'Rc', 'Arc',
+                'Future', 'Stream', 'Generator', 'Iterator',
+                'Fn', 'FnMut', 'FnOnce',
+                'TypeOf', 'TypeName', 'IsCopy', 'IsSized',
+                'align_of', 'size_of_val', 'mem_swap', 'mem_zero',
             }
 
     # Ordered: longest/most specific first so greedy matching works.
-    # NV2.0 esoteric operators: ≠ (not-eq), ≈ (eq), ← (assign).
-    OPERATORS = ['**', '<<', '>>', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=',
-                 '//', '&&', '||', '->', '+', '-', '*', '/', '%', '=', '<', '>',
+    
+    OPERATORS = [
+                 
+                 '|>', '..=', '==', '!=', '<=', '>=', '+=', '-=', '*=', '/=',
+                 '<<', '>>', '//', '**', '&&', '||', '->', '=>', '::',
+                 '??', '?.', '..',
+                 '@=', '&=', '|=', '^=', '<<=', '>>=', '//=', '**=',
+                 # single-char
+                 '+', '-', '*', '/', '%', '=', '<', '>',
                  '~', '&', '|', '^', '(', ')', '[', ']', '{', '}', ',', ':', '.', ';', '@',
-                 '≠', '≈', '←']
+                 '?', '!',
+                 '≠', '≈', '←',
+                ]
 
     NAME_MAP = {
         '(': 'LPAREN', ')': 'RPAREN', ',': 'COMMA', ':': 'COLON', ';': 'SEMICOLON',
         '.': 'DOT', '[': 'LBRACKET', ']': 'RBRACKET', '{': 'LBRACE', '}': 'RBRACE',
         '+': 'PLUS', '-': 'MINUS', '*': 'TIMES', '/': 'DIVIDE', '**': 'POWER', '%': 'MOD',
         '=': 'ASSIGN',
-        # NV2.0 hard-mode esoteric operators
+        
         '≠': 'NEQ', '≈': 'EQ', '←': 'ASSIGN',
+        
+        '|>': 'PIPE', '=>': 'FAT_ARROW', '?': 'QUESTION',
+        '::': 'COLON_COLON', '..': 'DOTDOT', '..=': 'DOTDOT_EQ',
+        '??': 'NULLISH', '?.': 'OPTIONAL_CHAIN', '!': 'BANG',
     }
 
     def __init__(self, source: str):
@@ -163,6 +192,11 @@ class Lexer:
             self.pos += len(m.group(0))
             return
 
+        if m := re.match(r"'(?:[^'\\\n]|\\.){1}'", self.source[self.pos:]):
+            self.tokens.append(Token('CHAR', m.group(0), (self.line, self.col)))
+            self.pos += len(m.group(0))
+            return
+
         if m := re.match(r"'", self.source[self.pos:]):
             end = self.source.find("'", self.pos + 1)
             if end == -1:
@@ -177,9 +211,15 @@ class Lexer:
             self.pos += len(m.group(0))
             return
 
+        if m := re.match(r'0o[0-7]+', self.source[self.pos:]):
+            value = int(m.group(0), 8)
+            self.tokens.append(Token('OCTAL_NUMBER', value, (self.line, self.col)))
+            self.pos += len(m.group(0))
+            return
+
         if m := re.match(r'0x[0-9a-fA-F]+', self.source[self.pos:]):
             value = int(m.group(0), 16)
-            self.tokens.append(Token('NUMBER', value, (self.line, self.col)))
+            self.tokens.append(Token('HEX_NUMBER', value, (self.line, self.col)))
             self.pos += len(m.group(0))
             return
 
