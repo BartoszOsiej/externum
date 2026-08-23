@@ -86,12 +86,11 @@ class Runtime:
             pass
 
     # ------------------------------------------------------------- core API
-    def compile_to_python(self, source: str, protect: dict = None) -> str:
+    def compile_to_python(self, source: str, protect: dict = None, check: bool = False) -> str:
         """Compile Externum source to Python.
 
-        Externum is strict by design: macro expansion, mandatory
-        declarations, static typing and ownership enforcement run on EVERY
-        compilation — there is no relaxed mode.
+        Type checking is off by default (check=False). Set check=True
+        to run the strict type checker (declarations, annotations, ownership).
 
         - `protect={...}` — apply the full DRM stack to the output
           (keys: app_id, author, secret, build_id).
@@ -99,8 +98,9 @@ class Runtime:
         processed, _macros = preprocess(source)
         parser = self.parser_cls(self.lexer_cls(processed).tokenize())
         ast = list(parser.parse())
-        check_or_raise(ast, parser.annotations, parser.signatures,
-                       parser.traits, parser.impls, parser.mutable)
+        if check:
+            check_or_raise(ast, parser.annotations, parser.signatures,
+                           parser.traits, parser.impls, parser.mutable)
         result = self.compiler_cls(ast).compile('all')
         code = result['python']
         if protect:
@@ -115,25 +115,25 @@ class Runtime:
         return code
 
     def run(self, source: str, filename: str = '<externum>', argv=None,
-            protect: dict = None) -> dict:
+            protect: dict = None, check: bool = False) -> dict:
         """Execute an Externum program string. Returns the module namespace."""
         old_argv = sys.argv
         sys.argv = [filename] + list(argv or [])
         try:
-            return self._exec(source, filename, protect=protect)
+            return self._exec(source, filename, protect=protect, check=check)
         finally:
             sys.argv = old_argv
 
-    def run_file(self, path: str, argv=None, protect: dict = None) -> dict:
+    def run_file(self, path: str, argv=None, protect: dict = None, check: bool = False) -> dict:
         path = os.path.abspath(path)
         with open(path, 'r', encoding='utf-8') as fh:
             source = fh.read()
         # let the running script import sibling .ext modules
         self._finder._roots.insert(0, os.path.dirname(path))
-        return self.run(source, filename=path, argv=argv, protect=protect)
+        return self.run(source, filename=path, argv=argv, protect=protect, check=check)
 
-    def _exec(self, source: str, filename: str, protect: dict = None) -> dict:
-        code = self.compile_to_python(source, protect=protect)
+    def _exec(self, source: str, filename: str, protect: dict = None, check: bool = False) -> dict:
+        code = self.compile_to_python(source, protect=protect, check=check)
         ns = {'__name__': '__main__', '__file__': filename}
         ns.update(externum_globals())
         exec(compile(code, filename, 'exec'), ns)

@@ -23,7 +23,7 @@ def run_strict(src: str) -> dict:
     """Run a program (strict language) with stdout captured into ns['_printed']."""
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        ns = RT.run(src)
+        ns = RT.run(src, check=True)
     ns['_printed'] = buf.getvalue().splitlines()
     return ns
 
