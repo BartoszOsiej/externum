@@ -11,7 +11,7 @@
 ![PyPI](https://img.shields.io/badge/PyPI-externum%402.0.0-3776AB?style=flat-square&logo=pypi)
 ![Tests](https://img.shields.io/badge/Tests-307%20✓-brightgreen?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/BartoszOsiej/externum/badge)](https://securityscorecards.dev/viewer/?uri=github.com/BartoszOsiej/externum)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/externum/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/externum)
 [![OpenSSF Best Practices](https://img.shields.io/badge/OpenSSF-Best%20Practices-brightgreen?style=flat-square)](https://www.bestpractices.dev/projects/externum)
 
 **A self-hosted programming language blending Python readability, binary performance,
