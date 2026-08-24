@@ -2,7 +2,7 @@ Output assets/compile.gif
 Set FontSize 18
 Set Width 1000
 Set Height 500
-Set Theme "monokai"
+Set Theme "Molokai"
 
 Type "externum examples/hello.ext"
 Enter

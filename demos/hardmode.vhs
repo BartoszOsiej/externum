@@ -2,7 +2,7 @@ Output assets/hardmode.gif
 Set FontSize 18
 Set Width 1000
 Set Height 600
-Set Theme "monokai"
+Set Theme "Molokai"
 
 Type "externum run examples/hardcore.ext --hard"
 Enter
