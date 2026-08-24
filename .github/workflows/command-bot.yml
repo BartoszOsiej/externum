@@ -6,9 +6,6 @@ name: command-bot
 
 on:
   issue_comment:
-    permissions:
-      contents: write
-    types: [created]
 
 permissions: read-all
 

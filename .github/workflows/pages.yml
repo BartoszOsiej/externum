@@ -2,13 +2,6 @@ name: Deploy Playground (Pages)
 
 on:
   push:
-    permissions:
-      contents: write
-    branches: [main]
-    paths: ["docs/**", "externum/**", "lib/**"]
-  workflow_dispatch:
-    permissions:
-      contents: write
 
 permissions: read-all
 
