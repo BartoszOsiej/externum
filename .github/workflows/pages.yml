@@ -2,14 +2,15 @@ name: Deploy Playground (Pages)
 
 on:
   push:
+    permissions:
+      contents: write
     branches: [main]
     paths: ["docs/**", "externum/**", "lib/**"]
   workflow_dispatch:
+    permissions:
+      contents: write
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+permissions: read-all
 
 concurrency:
   group: pages
@@ -17,6 +18,8 @@ concurrency:
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -38,6 +41,8 @@ jobs:
           path: docs
 
   deploy:
+    permissions:
+      contents: write
     needs: build
     runs-on: ubuntu-latest
     environment:

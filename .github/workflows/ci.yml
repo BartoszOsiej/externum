@@ -6,9 +6,7 @@ on:
   pull_request:
     branches: [main, master]
 
-permissions:
-  contents: read
-  security-events: write
+permissions: read-all
 
 concurrency:
   group: ci-${{ github.ref }}

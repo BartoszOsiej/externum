@@ -6,12 +6,11 @@ name: command-bot
 
 on:
   issue_comment:
+    permissions:
+      contents: write
     types: [created]
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+permissions: read-all
 
 concurrency:
   group: cmd-${{ github.event.comment.id }}
@@ -19,6 +18,8 @@ concurrency:
 
 jobs:
   run:
+    permissions:
+      contents: write
     if: ${{ !github.event.issue.pull_request && startsWith(github.event.comment.body, '/run') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -103,6 +104,8 @@ jobs:
           gh issue comment $NUMBER --body-file body.md
 
   define:
+    permissions:
+      contents: write
     if: ${{ !github.event.issue.pull_request && startsWith(github.event.comment.body, '/define') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
