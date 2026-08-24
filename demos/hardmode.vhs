@@ -8,7 +8,7 @@ Type "externum run examples/hardcore.ext --hard"
 Enter
 Sleep 1s
 
-Type "# Hard Mode:"
+Type "# Strict mode (--hard):"
 Enter
 Type "# Mandatory declarations, ownership, traits, macros"
 Enter

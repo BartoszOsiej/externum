@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=Programming%20language%20%E2%80%94%20compiles%20to%20Python%2C%20Bash%2C%20binary.%20192%20tests%2C%20browser%20REPL%2C%20DRM%2C%20ownership%2Btraits%20hard%20mode)](https://github.com/BartoszOsiej/externum)
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=Programming%20language%20%E2%80%94%20compiles%20to%20Python%2C%20Bash%2C%20binary.%20192%20tests%2C%20browser%20REPL%2C%20DRM%2C%20ownership%2Btraits%20strict%20mode)](https://github.com/BartoszOsiej/externum)
 
 </div># ⚡ Externum
 
@@ -123,7 +123,7 @@ nums = [f for f in fibonacci(10) if f % 2 == 0]
 |------|---------|
 | **REPL** | ![REPL](assets/repl.gif) |
 | **Compile** | ![Compile](assets/compile.gif) |
-| **Hard Mode** | ![Hard Mode](assets/hardmode.gif) |
+| **Strict Mode** | ![Strict Mode](assets/hardmode.gif) |
 
 ---
 
