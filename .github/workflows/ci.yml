@@ -185,7 +185,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - uses: crate-ci/typos@12ffd4a04b4893ab75db66a59aaad2d996c3e982
+      - uses: crate-ci/typos@8a48f81b6c64dcfea44b3633223084c4be58ac5f
 
   # ── Stage 9: Build Package ─────────────────────────────────────────
   build:
