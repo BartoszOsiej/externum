@@ -123,6 +123,7 @@ nums = [f for f in fibonacci(10) if f % 2 == 0]
 |------|---------|
 | **REPL** | ![REPL](assets/repl.gif) |
 | **Compile** | ![Compile](assets/compile.gif) |
+| **Hard Mode** | ![Hard Mode](assets/hardmode.gif) |
 
 ---
 
