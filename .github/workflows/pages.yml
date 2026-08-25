@@ -35,7 +35,9 @@ jobs:
 
   deploy:
     permissions:
-      contents: write
+      contents: read
+      id-token: write
+      pages: write
     needs: build
     runs-on: ubuntu-latest
     environment:
