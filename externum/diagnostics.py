@@ -16,7 +16,6 @@ instead of a bare one-liner.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 _LINES_RE = re.compile(r"[^\n]*(?:\n|$)")
 
@@ -33,7 +32,7 @@ def _line_of(source: str, line_no: int) -> str:
     return ""
 
 
-def _col_of(source: str, line_no: int, col_no: Optional[int]) -> int:
+def _col_of(source: str, line_no: int, col_no: int | None) -> int:
     """Sanitize a column; default to 1."""
     if col_no is None or col_no < 1:
         return 1
@@ -68,8 +67,8 @@ def format_runtime_error(
     exc: BaseException,
     source: str,
     filename: str = "<source>",
-    line_no: Optional[int] = None,
-    col_no: Optional[int] = None,
+    line_no: int | None = None,
+    col_no: int | None = None,
 ) -> str:
     """Format a runtime error with location + snippet (location optional)."""
     header = f"Runtime Error: {exc}"
@@ -88,7 +87,7 @@ def _render_snippet(
     source: str,
     line_no: int,
     col: int,
-    text_override: Optional[str] = None,
+    text_override: str | None = None,
     context: int = 1,
 ) -> list[str]:
     """Gutter-rendered snippet: `>` marks the error line, `^` the column."""
@@ -118,7 +117,7 @@ class SourceMap:
 
     __slots__ = ("_table",)
 
-    def __init__(self, table: Optional[dict[int, int]] = None):
+    def __init__(self, table: dict[int, int] | None = None):
         self._table: dict[int, int] = dict(table or {})
 
     def line_at(self, offset: int) -> int:
