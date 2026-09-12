@@ -520,7 +520,14 @@ class VM:
         self._current_fn = None
         return self._execute(module.bytecode, module.constants, {}, module.functions)
 
-    def run_function(self, fn: BytecodeFunction, args: list, kwargs: dict = None, upvalues: dict = None, fn_obj: "BytecodeFunction | None" = None) -> Any:
+    def run_function(
+        self,
+        fn: BytecodeFunction,
+        args: list,
+        kwargs: dict = None,
+        upvalues: dict = None,
+        fn_obj: "BytecodeFunction | None" = None,
+    ) -> Any:
         # Save and restore the stack to avoid corruption during nested calls
         saved_stack = self._stack
         self._stack = []
@@ -597,7 +604,13 @@ class VM:
 
     # ── bytecode executor ─────────────────────────────────────────
     def _execute(
-        self, bytecode: bytearray, constants: list, local_vars: dict, all_fns: list, fn_name: str = "<module>", fn_obj: "BytecodeFunction | None" = None
+        self,
+        bytecode: bytearray,
+        constants: list,
+        local_vars: dict,
+        all_fns: list,
+        fn_name: str = "<module>",
+        fn_obj: "BytecodeFunction | None" = None,
     ) -> Any:
         ip = 0
         stack = self._stack

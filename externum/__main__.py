@@ -118,12 +118,14 @@ def cmd_run(args) -> None:
         Runtime().run_file(args.file, argv=args.args, protect=protect)
     except SyntaxError as exc:
         from .diagnostics import format_syntax_error
+
         print(format_syntax_error(exc, _last_source[0], filename=args.file), file=sys.stderr)
         sys.exit(1)
     except SystemExit:
         raise
     except Exception as exc:
         from .diagnostics import format_runtime_error
+
         line = _source_line_from_traceback(exc, args.file)
         print(format_runtime_error(exc, _last_source[0], filename=args.file, line_no=line), file=sys.stderr)
         sys.exit(1)
@@ -257,10 +259,12 @@ def cmd_vm(args) -> None:
         result = vm.run_module(module)
     except SyntaxError as exc:
         from .diagnostics import format_syntax_error
+
         print(format_syntax_error(exc, source, filename=args.file), file=sys.stderr)
         sys.exit(1)
     except Exception as exc:
         from .diagnostics import format_runtime_error
+
         line, col = vm.error_location() if vm is not None else (0, 0)
         print(
             format_runtime_error(exc, source, filename=args.file, line_no=line or None, col_no=col),
