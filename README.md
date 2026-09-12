@@ -258,3 +258,8 @@ Because most languages force you to choose: readable or fast, scripting or syste
 ## License
 
 MIT
+## Deep Dives
+
+Extended dossiers (architecture, verification, benchmarks, error codex) ship in this repo:
+- [ERROR_CODEX.md](ERROR_CODEX.md)
+- [SECURITY.md](SECURITY.md)
