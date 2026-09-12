@@ -20,6 +20,7 @@ class ASTNode:
     type: str
     value: any = None
     children: list["ASTNode"] = field(default_factory=list)
+    line: int = 0  # 1-based source line (stamped by _parse_statement)
 
 
 # Operator precedence — higher binds tighter (mirrors Python).
@@ -116,6 +117,13 @@ class Parser:
 
     # -------------------------------------------------------------- statements
     def _parse_statement(self) -> ASTNode:
+        start_tok = self.tokens[self.pos]
+        node = self._parse_statement_inner()
+        if node is not None and not getattr(node, "line", 0):
+            node.line = start_tok.pos[0] if start_tok.pos else 0
+        return node
+
+    def _parse_statement_inner(self) -> ASTNode:
         tok = self.tokens[self.pos]
         t = tok.type
         if t == "STRUCT":

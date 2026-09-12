@@ -433,7 +433,18 @@ class Lexer:
             self.pos += len(value)
             return
 
-        raise SyntaxError(f"Unexpected '{char}' at {self.line}:{self.col}")
+        # Column: count characters from the last newline up to this position.
+        line_start = self.source.rfind("\n", 0, self.pos) + 1
+        self.col = self.pos - line_start + 1
+        raise SyntaxError(
+            f"Unexpected '{char}' at {self.line}:{self.col}",
+            (
+                "<externum>",
+                self.line,
+                self.col,
+                self.source.splitlines()[self.line - 1] if 0 < self.line <= len(self.source.splitlines()) else "",
+            ),
+        )
 
     # -------------------------------------------------------------- helpers
     def _consume_indent(self) -> int:

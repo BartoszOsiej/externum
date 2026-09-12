@@ -187,6 +187,7 @@ class BytecodeModule:
     enums: dict[str, dict] = field(default_factory=dict)
     traits: dict[str, dict] = field(default_factory=dict)
     imports: list[str] = field(default_factory=list)
+    line_table: dict[int, int] = field(default_factory=dict)  # bytecode_offset -> source line
 
 
 class BytecodeCompiler:
@@ -221,6 +222,8 @@ class BytecodeCompiler:
             target.extend(struct.pack(">H", a & 0xFFFF))
         if self._current_fn:
             self._current_fn.line_table[offset] = self._line
+        else:
+            self.module.line_table[offset] = self._line
         return offset
 
     def _emit1(self, op: int, byte: int):
@@ -231,6 +234,8 @@ class BytecodeCompiler:
         target.append(byte & 0xFF)
         if self._current_fn:
             self._current_fn.line_table[offset] = self._line
+        else:
+            self.module.line_table[offset] = self._line
         return offset
 
     def _emit2(self, op: int, idx: int, byte: int):
@@ -242,6 +247,8 @@ class BytecodeCompiler:
         target.append(byte & 0xFF)
         if self._current_fn:
             self._current_fn.line_table[offset] = self._line
+        else:
+            self.module.line_table[offset] = self._line
         return offset
 
     def _emit_jump(self, op: int) -> int:
@@ -301,6 +308,9 @@ class BytecodeCompiler:
         t = node.type
         if t == "NEWLINE" or t in ("INDENT", "DEDENT"):
             return
+        # Track source line for the line_table (diagnostics).
+        if getattr(node, "line", 0):
+            self._line = node.line
         method = getattr(self, f"_stmt_{t}", None)
         if method:
             method(node)
@@ -444,9 +454,13 @@ class BytecodeCompiler:
         for a in arg_names:
             self._declare_var(a)
 
+        old_line = self._line
+        if getattr(node, "line", 0):
+            self._line = node.line
         for child in body_nodes:
             self._compile_stmt(child)
         self._emit(RETURN)
+        self._line = old_line
 
         self._current_fn = old_fn
         self._scope_stack = old_scope

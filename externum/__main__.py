@@ -93,11 +93,17 @@ def _read_source(path: str) -> str:
         sys.exit(1)
 
 
+# Last-read source text, so error handlers can render snippets without
+# re-reading the file (and work even if the file changed mid-run).
+_last_source: list[str] = [""]
+
+
 def cmd_run(args) -> None:
     backend = getattr(args, "backend", "vm")
     if backend == "vm":
         cmd_vm(args)
         return
+    _last_source[0] = _read_source(args.file)
     try:
         from .runtime import Runtime
 
@@ -111,13 +117,38 @@ def cmd_run(args) -> None:
             }
         Runtime().run_file(args.file, argv=args.args, protect=protect)
     except SyntaxError as exc:
-        print(f"Syntax Error: {exc}", file=sys.stderr)
+        from .diagnostics import format_syntax_error
+        print(format_syntax_error(exc, _last_source[0], filename=args.file), file=sys.stderr)
         sys.exit(1)
     except SystemExit:
         raise
     except Exception as exc:
-        print(f"Runtime Error: {exc}", file=sys.stderr)
+        from .diagnostics import format_runtime_error
+        line = _source_line_from_traceback(exc, args.file)
+        print(format_runtime_error(exc, _last_source[0], filename=args.file, line_no=line), file=sys.stderr)
         sys.exit(1)
+
+
+def _source_line_from_traceback(exc: BaseException, filename: str) -> int | None:
+    """Innermost traceback frame belonging to the .ex source file.
+
+    The python backend exec()s the transpiled code with filename=<script>,
+    so tracebacks carry real Externum line numbers — we just dig them out.
+    Returns None when the failure happened outside the program's code.
+    """
+    import traceback as _tb
+
+    try:
+        frames = _tb.extract_tb(exc.__traceback__)
+    except Exception:
+        return None
+    import os as _os
+
+    target = _os.path.abspath(filename)
+    for frame in reversed(frames):
+        if _os.path.abspath(frame.filename or "") == target and frame.lineno:
+            return frame.lineno
+    return None
 
 
 def cmd_keygen(args) -> None:
@@ -212,6 +243,8 @@ def cmd_compile(args) -> None:
 def cmd_vm(args) -> None:
     """Run via the native EXBC virtual machine."""
     source = _read_source(args.file)
+    _last_source[0] = source
+    vm = None
     try:
         from .analysis import preprocess
 
@@ -223,10 +256,16 @@ def cmd_vm(args) -> None:
         vm = VM(argv=getattr(args, "args", []))
         result = vm.run_module(module)
     except SyntaxError as exc:
-        print(f"Syntax Error: {exc}", file=sys.stderr)
+        from .diagnostics import format_syntax_error
+        print(format_syntax_error(exc, source, filename=args.file), file=sys.stderr)
         sys.exit(1)
     except Exception as exc:
-        print(f"Runtime Error: {exc}", file=sys.stderr)
+        from .diagnostics import format_runtime_error
+        line, col = vm.error_location() if vm is not None else (0, 0)
+        print(
+            format_runtime_error(exc, source, filename=args.file, line_no=line or None, col_no=col),
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 

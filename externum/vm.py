@@ -390,6 +390,13 @@ class VM:
         self._modules: dict[str, BytecodeModule] = {}
         self._defer_stack: list[list] = []
         self._channels: dict[int, queue.Queue] = {}
+        # Error context: last (module, function, ip) seen by the interpreter,
+        # used to map exceptions back to source lines for diagnostics.
+        self._current_module: BytecodeModule | None = None
+        self._current_fn: BytecodeFunction | None = None
+        self._current_ip = 0
+        self._call_stack: list[tuple] = []  # frames of (module, fn, ip)
+        self._fns_by_name: dict[str, BytecodeFunction] = {}  # name -> fn, for error mapping
         self._thread_counter = _itertools.count(1)
         self._builtin_keys = set()  # track builtins for import filtering
         # Pre-populate builtins
@@ -509,12 +516,17 @@ class VM:
     # ── main entry ────────────────────────────────────────────────
     def run_module(self, module: BytecodeModule) -> Any:
         self._modules[module.name] = module
+        self._current_module = module
+        self._current_fn = None
         return self._execute(module.bytecode, module.constants, {}, module.functions)
 
-    def run_function(self, fn: BytecodeFunction, args: list, kwargs: dict = None, upvalues: dict = None) -> Any:
+    def run_function(self, fn: BytecodeFunction, args: list, kwargs: dict = None, upvalues: dict = None, fn_obj: "BytecodeFunction | None" = None) -> Any:
         # Save and restore the stack to avoid corruption during nested calls
         saved_stack = self._stack
         self._stack = []
+        saved_fn = self._current_fn
+        saved_ip = self._current_ip
+        self._call_stack.append((saved_fn, saved_ip))
         try:
             # Build local vars: named args first, then defaults
             local_vars = dict(upvalues or {})
@@ -531,9 +543,11 @@ class VM:
                 local_vars,
                 self._modules[list(self._modules.keys())[0]].functions if self._modules else [],
                 fn_name=fn.name,
+                fn_obj=fn_obj or fn,
             )
         finally:
             self._stack = saved_stack
+            self._current_fn, self._current_ip = self._call_stack.pop()
 
     def run_source(self, source: str) -> Any:
         """Compile source and run it."""
@@ -583,13 +597,18 @@ class VM:
 
     # ── bytecode executor ─────────────────────────────────────────
     def _execute(
-        self, bytecode: bytearray, constants: list, local_vars: dict, all_fns: list, fn_name: str = "<module>"
+        self, bytecode: bytearray, constants: list, local_vars: dict, all_fns: list, fn_name: str = "<module>", fn_obj: "BytecodeFunction | None" = None
     ) -> Any:
         ip = 0
         stack = self._stack
         locals_ = dict(local_vars)
         try_depth = 0
         catch_ip = None
+        # Publish interpreter position for diagnostics (line mapping).
+        outer_fn = self._current_fn
+        outer_ip = self._current_ip
+        self._current_fn = fn_obj
+        self._current_ip = 0
 
         def _read_u16():
             nonlocal ip
@@ -775,7 +794,7 @@ class VM:
                 elif isinstance(fn, ExternumClosure):
                     stack.append(self.run_function(fn.fn, args, upvalues=fn.upvalues))
                 elif isinstance(fn, BytecodeFunction):
-                    stack.append(self.run_function(fn, args))
+                    stack.append(self.run_function(fn, args, fn_obj=fn))
                 elif isinstance(fn, ExternumClass):
                     instance = ExternumInstance(fn)
                     if "__init__" in fn.methods:
@@ -800,6 +819,7 @@ class VM:
                 fn = all_fns[idx]
                 closure = ExternumClosure(fn, dict(locals_))
                 stack.append(closure)
+                self._fns_by_name[fn.name] = fn  # diagnostics: line lookup
 
             elif op == MAKE_CLASS:
                 idx = _read_u16()
@@ -1067,11 +1087,36 @@ class VM:
                             _store(imp, getattr(mod_obj, imp))
 
             else:
+                self._current_ip = ip
                 raise ExternumError(f"unknown opcode: 0x{op:02x} at ip={ip}")
 
+            self._current_ip = ip
         return stack.pop() if stack else None
 
     # ── intrinsics ──────────────────────────────────────────────────
+    def error_location(self) -> tuple[int, int]:
+        """Best-known (line, col) of the failure, from line tables.
+        Returns (0, 0) when no mapping is available.
+
+        After an exception unwinds nested run_function() calls, _current_fn
+        is the outermost frame; the failing function is usually the *last*
+        closure called from that frame. We map the failing call site's line
+        first; if the call itself is at that line, we're done — otherwise we
+        fall back to the module table.
+        """
+        from .diagnostics import SourceMap
+
+        ip = self._current_ip
+        # 1) Innermost function frame still recorded (error in top-level fn).
+        if self._current_fn is not None and self._current_fn.line_table:
+            return SourceMap(self._current_fn.line_table).line_at(max(0, ip - 4)), 1
+        # 2) Error unwound from a called function: report the call site line.
+        if self._current_module is not None and self._current_module.line_table:
+            call_line = SourceMap(self._current_module.line_table).line_at(max(0, ip - 4))
+            if call_line:
+                return call_line, 1
+        return 0, 0
+
     def _call_intrinsic(self, code: int, args: list) -> Any:
         if code == 0:
             return self._builtin_print(*args)
