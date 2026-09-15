@@ -25,6 +25,8 @@ jobs:
           cp externum/*.py docs/externum-live/externum/
           cp externum/runtime/*.py docs/externum-live/externum/runtime/
           cp lib/*.ext docs/externum-live/lib/
+          cp docs/bootstrap.py docs/externum-live/bootstrap.py
+          python3 -m py_compile docs/bootstrap.py
           find docs -type f | sort
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b

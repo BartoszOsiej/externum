@@ -230,52 +230,11 @@ async function boot() {
       py.FS.writeFile(`/lib/lib/${name}.ext`, code);
     }
 
-    py.runPython(`
-import sys, io, os
-sys.path.insert(0, '/lib')
-os.chdir('/lib')
-
-def ext_run(source):
-    from externum import Runtime
-    buf = io.StringIO()
-    old = sys.stdout, sys.stderr
-    sys.stdout = sys.stderr = buf
-    try:
-        Runtime(search_roots=['/lib']).run(source)
-        return ('ok', buf.getvalue())
-    except Exception as e:
-        return ('err', f'{type(e).__name__}: {e}\\n' + buf.getvalue())
-    finally:
-        sys.stdout, sys.stderr = old
-
-def ext_compile(source, target):
-    from externum import Lexer, Parser, Compiler
-    ast = list(Parser(Lexer(source).tokenize()).parse())
-    out = Compiler(ast).compile(target)
-    # single-target compile returns a list of lines; "all" returns a dict of strings
-    if isinstance(out, list):
-        out = '\n'.join(out)
-    elif not isinstance(out, str):
-        out = ''
-    return out if out.strip() else f'# (target "{target}" produced no output)'
-
-def ext_install_module(name, code):
-    safe = ''.join(c for c in name if c.isalnum() or c == '_')
-    if not safe or safe[0].isdigit():
-        return ('err', 'invalid module name')
-    with open(f'/lib/lib/{safe}.ext', 'w') as fh:
-        fh.write(code)
-    for m in [k for k in list(sys.modules) if k == safe]:
-        del sys.modules[m]
-    return ('ok', f'/lib/lib/{safe}.ext')
-
-def ext_remove_module(name):
-    p = f'/lib/lib/{name}.ext'
-    if os.path.exists(p):
-        os.remove(p)
-        return ('ok', p)
-    return ('err', 'not found')
-`);
+    // Python bootstrap lives in its own file (docs/bootstrap.py): keeping it
+    // out of a JS template literal means backslashes/quotes stay plain Python
+    // and no string-escaping bug can ever break the playground again.
+    const bootstrapSrc = await fetchText('externum-live/bootstrap.py');
+    await py.runPythonAsync(bootstrapSrc);
     pyodide = py;
     setStatus('Runtime ready — you are running a real language implementation', 'ok');
     return py;
