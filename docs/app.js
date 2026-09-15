@@ -8,10 +8,17 @@ const REPO_RAW = 'https://raw.githubusercontent.com/BartoszOsiej/externum/main/'
 
 const CORE_FILES = [
   'externum/__init__.py',
+  'externum/analysis.py',
+  'externum/bytecode.py',
+  'externum/diagnostics.py',
+  'externum/drm.py',
   'externum/lexer.py',
   'externum/parser.py',
   'externum/compiler.py',
+  'externum/typesys.py',
+  'externum/vm.py',
   'externum/runtime/__init__.py',
+  'externum/runtime/rtlib.py',
 ];
 
 const STDLIB_MODULES = ['mathx', 'strings', 'structs', 'fs'];
@@ -245,7 +252,12 @@ def ext_compile(source, target):
     from externum import Lexer, Parser, Compiler
     ast = list(Parser(Lexer(source).tokenize()).parse())
     out = Compiler(ast).compile(target)
-    return out if isinstance(out, str) and out.strip() else f'# (target "{target}" produced no output)'
+    # single-target compile returns a list of lines; "all" returns a dict of strings
+    if isinstance(out, list):
+        out = '\n'.join(out)
+    elif not isinstance(out, str):
+        out = ''
+    return out if out.strip() else f'# (target "{target}" produced no output)'
 
 def ext_install_module(name, code):
     safe = ''.join(c for c in name if c.isalnum() or c == '_')

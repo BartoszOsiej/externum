@@ -22,8 +22,8 @@ jobs:
       - name: Bundle live language sources into the site
         run: |
           mkdir -p docs/externum-live/externum/runtime docs/externum-live/lib
-          cp externum/__init__.py externum/lexer.py externum/parser.py externum/compiler.py docs/externum-live/externum/
-          cp externum/runtime/__init__.py docs/externum-live/externum/runtime/
+          cp externum/*.py docs/externum-live/externum/
+          cp externum/runtime/*.py docs/externum-live/externum/runtime/
           cp lib/*.ext docs/externum-live/lib/
           find docs -type f | sort
 
