@@ -854,6 +854,33 @@ class BytecodeCompiler:
                 val = val[1:-1]
         self._emit(LOAD_CONST, self._add_const(val))
 
+    def _expr_INTERP(self, node: ASTNode):
+        """$"text {expr} more" → parts joined with str() + ADD.
+
+        Each expression child compiles then passes through the ``str``
+        intrinsic (code 2) so ``ADD`` is always string concatenation;
+        literal children are pushed as constants. The result matches the
+        Python f-string semantics of the transpile target.
+        """
+        parts = [c for c in node.children if c is not None]
+        if not parts:
+            self._emit(LOAD_CONST, self._add_const(""))
+            return
+        for i, child in enumerate(parts):
+            if child.type == "EXPRESSION":
+                self._compile_simple_expr(str(child.value))
+                self._emit2(INTRINSIC, 2, 1)  # str(x)
+            else:
+                lit = child.value
+                if len(lit) >= 2 and lit[0] == lit[-1] and lit[0] in ('"', "'"):
+                    lit = lit[1:-1]
+                # resolve f-string brace escapes: {{ → {, }} → }
+                lit = lit.replace("{{", "{").replace("}}", "}")
+                self._emit(LOAD_CONST, self._add_const(lit))
+            if i > 0:
+                # ADD pops (b, a) → a + b: both operands are on the stack now
+                self._emit(ADD)
+
     def _expr_IDENTIFIER(self, node: ASTNode):
         name = node.value
         if name in ("True",):

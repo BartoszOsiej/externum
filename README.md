@@ -45,7 +45,7 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 
 | Area | Support |
 |---|---|
-| **Data types** | lists, dicts, tuples, sets, f-strings, binary `0b` and hex `0x` literals |
+| **Data types** | lists, dicts, tuples, sets, f-strings, `$"…"` interpolation, binary `0b` and hex `0x` literals |
 | **Control flow** | `if/elif/else`, `while`, `for ... in`, `break`, `continue`, `try/except/else/finally`, `with`, `assert` |
 | **Functions** | default parameters, `*args`/`**kwargs`, type annotations, recursion, lambdas, closures, generators (`yield`) |
 | **OOP** | classes, inheritance, methods, `self`, attributes |
@@ -95,6 +95,18 @@ externum examples/hello.ext --target bash
 
 ## Example
 
+
+### String interpolation — `$"…"`
+
+```rust
+name: Any = "Bartosz"
+print($"Hello {name}, 2+2 = {2+2}!")   // → Hello Bartosz, 2+2 = 4!
+print($"{{literal}}")                    // → {literal}
+```
+
+`$"…"` strings interpolate `{expr}` at runtime — arithmetic, calls and any
+variable in scope. The Python target emits native f-strings; the bytecode VM
+concatenates parts with the `str` intrinsic. Same semantics on every target.
 
 `examples/pokedex.ext` uses classes with inheritance, comprehensions,
 lambdas, exceptions, generators, f-strings, and the standard library:

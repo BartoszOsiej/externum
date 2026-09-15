@@ -515,6 +515,23 @@ class Compiler:
     def _compile_STRING(self, node: ASTNode):
         self.output["python"].append(f"{self._i()}{self._string_repr(node.value)}")
 
+    def _compile_INTERP(self, node: ASTNode):
+        """$"text {expr} more" → f-string passthrough (Python-native)."""
+        self.output["python"].append(f"{self._i()}f{self._interp_parts_to_str(node)}")
+
+    def _interp_parts_to_str(self, node: ASTNode) -> str:
+        """Render INTERP children as an f-string body (escapes preserved)."""
+        parts = []
+        for child in node.children:
+            if child.type == "EXPRESSION":
+                parts.append("{" + str(child.value) + "}")
+            else:
+                lit = child.value
+                if len(lit) >= 2 and lit[0] == lit[-1] and lit[0] in ('"', "'"):
+                    lit = lit[1:-1]
+                parts.append(lit)
+        return repr("".join(parts))
+
     def _compile_EXPRESSION(self, node: ASTNode):
         val = node.value
         if isinstance(val, str):
@@ -604,6 +621,8 @@ class Compiler:
             return f'int("{bin(node.value)[2:]}", 2)'
         if t == "STRING":
             return self._string_repr(node.value)
+        if t == "INTERP":
+            return "f" + self._interp_parts_to_str(node)
         if t == "IDENTIFIER":
             return node.value
         if t in ("EXPRESSION", "INDEX", "DOT", "LIST", "DICT", "SET", "TUPLE", "UNKNOWN"):

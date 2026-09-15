@@ -2,6 +2,13 @@
 
 All notable changes to Externum will be documented in this file.
 
+## [0.3.0] - 2026-09-15
+
+### Added
+- Native string interpolation: `$"Hello {name}, {a+b}!"` — lexer, parser, and both compilers (Python transpiler + bytecode VM)
+- f-string-compatible escape semantics: `{{` and `}}` render as literal braces
+- 8 new tests covering interpolation through both execution targets
+
 ## [0.2.0] - 2025-08-01
 
 ### Added

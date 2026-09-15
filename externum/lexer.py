@@ -369,6 +369,17 @@ class Lexer:
         if self.source[self.pos : self.pos + 3] in ('"""', "'''"):
             return self._tokenize_triple_string()
 
+        # interpolated strings: $"..." — dedicated token type so the
+        # parsers/compilers can distinguish them from plain strings
+        if m := re.match(r'\$"(?:[^"\\]|\\.)*"', self.source[self.pos :]):
+            self.tokens.append(Token("INTERP_STRING", m.group(0), (self.line, self.col)))
+            self.pos += len(m.group(0))
+            return
+        if m := re.match(r"\$'(?:[^'\\]|\\.)*'", self.source[self.pos :]):
+            self.tokens.append(Token("INTERP_STRING", m.group(0), (self.line, self.col)))
+            self.pos += len(m.group(0))
+            return
+
         # prefixed strings: f"..." r"..." b"..."
         if m := re.match(r'[fFrRbBuU]"(?:[^"\\]|\\.)*"', self.source[self.pos :]):
             self.tokens.append(Token("STRING", m.group(0), (self.line, self.col)))

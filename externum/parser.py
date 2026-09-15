@@ -947,6 +947,9 @@ class Parser:
         if t in ("STRING", "CHAR"):
             self.pos += 1
             return self._parse_postfix(ASTNode("STRING", value=tok.value))
+        if t == "INTERP_STRING":
+            self.pos += 1
+            return self._parse_postfix(self._parse_interp_string(tok.value))
         if t in (
             "IDENTIFIER",
             "BUILTIN",
@@ -991,6 +994,55 @@ class Parser:
             return self._parse_bash_command()
         self.pos += 1
         return ASTNode("UNKNOWN", value=tok.value)
+
+    # --------------------------------------------------------- interpolation
+    _INTERP_PARTS = re.compile(r"(\{[^{}]*\})", re.DOTALL)
+
+    def _parse_interp_string(self, raw: str) -> ASTNode:
+        """Parse ``$"text {expr} more"`` into an INTERP node.
+
+        Children alternate: literal STRING nodes and EXPRESSION nodes holding
+        the un-braced expression source (compiled by the targets). ``{{`` and
+        ``}}`` stay in literals as escapes (Python f-string semantics: they
+        render as ``{`` / ``}``).
+        """
+        if len(raw) >= 2 and raw[1] == '"':
+            inner = raw[2:-1] if raw.endswith('"') else raw[2:]
+        elif len(raw) >= 2 and raw[1] == "'":
+            inner = raw[2:-1] if raw.endswith("'") else raw[2:]
+        else:
+            inner = raw
+        children: list[ASTNode] = []
+        buf: list[str] = []
+        i = 0
+        while i < len(inner):
+            ch = inner[i]
+            if ch == "{" and i + 1 < len(inner) and inner[i + 1] == "{":
+                buf.append("{{")  # escaped literal brace
+                i += 2
+                continue
+            if ch == "}" and i + 1 < len(inner) and inner[i + 1] == "}":
+                buf.append("}}")
+                i += 2
+                continue
+            if ch == "{":
+                j = inner.find("}", i + 1)
+                if j == -1:
+                    buf.append(ch)
+                    i += 1
+                    continue
+                if buf:
+                    children.append(ASTNode("STRING", value='"' + "".join(buf) + '"'))
+                    buf = []
+                expr = inner[i + 1 : j].strip() or "None"
+                children.append(ASTNode("EXPRESSION", value=expr))
+                i = j + 1
+                continue
+            buf.append(ch)
+            i += 1
+        if buf:
+            children.append(ASTNode("STRING", value='"' + "".join(buf) + '"'))
+        return ASTNode("INTERP", children=children)
 
     def _parse_postfix(self, left: ASTNode) -> ASTNode:
         while self.pos < len(self.tokens):
@@ -1269,6 +1321,8 @@ class Parser:
             return str(node.value)
         if t == "STRING":
             return node.value
+        if t == "INTERP":
+            return "f" + self._interp_to_fstring(node)
         if t == "CHAR":
             return node.value
         if t == "IDENTIFIER":
@@ -1292,3 +1346,19 @@ class Parser:
             body = self._node_to_str(node.children[0]) if node.children else "None"
             return f"lambda {node.value}: {body}"
         return str(node.value)
+
+    def _interp_to_fstring(self, node: ASTNode) -> str:
+        """Render an INTERP node as a Python f-string literal.
+
+        Literals keep ``{{`` / ``}}`` escapes — the f-string resolves them.
+        """
+        parts = []
+        for child in node.children:
+            if child.type == "EXPRESSION":
+                parts.append("{" + str(child.value) + "}")
+            else:
+                lit = child.value
+                if len(lit) >= 2 and lit[0] == lit[-1] and lit[0] in ('"', "'"):
+                    lit = lit[1:-1]
+                parts.append(lit)
+        return "f" + repr("".join(parts))

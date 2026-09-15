@@ -630,3 +630,55 @@ class TestNetStdlib(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# =================================================================== INTERP
+class TestStringInterpolation(unittest.TestCase):
+    """$"..." — native string interpolation, Python f-string semantics."""
+
+    def test_interp_token(self):
+        toks = Lexer('s = $"x {a} y"\n').tokenize()
+        self.assertEqual(
+            [t.type for t in toks if t.type in ("STRING", "INTERP_STRING")],
+            ["INTERP_STRING"],
+        )
+
+    def test_interp_python_target_is_fstring(self):
+        py = "\n".join(py_of('a: Any = 1\nprint($"v={a+1}")\n').strip().splitlines())
+        self.assertIn('f\'v={a+1}\'', py)
+
+    def test_interp_runtime_python_target(self):
+        out = run_capture('a: Any = 6\nb: Any = 7\nprint($"Hello {a+b}!")\n')
+        self.assertIn("Hello 13!", out)
+
+    def test_interp_runtime_vm(self):
+        out = run_vm('name: Any = "Bartosz"\nprint($"Hello {name}!")\n')
+        self.assertIn("Hello Bartosz!", out)
+
+    def test_interp_multiple_exprs_vm(self):
+        out = run_vm('a: Any = 2\nb: Any = 3\nprint($"{a}*{b}={a*b}")\n')
+        self.assertIn("2*3=6", out)
+
+    def test_interp_escape_braces_vm(self):
+        # f-string semantics: {{ renders as a literal {
+        out = run_vm('x: Any = 1\nprint($"{{x}}")\n')
+        self.assertIn("{x}", out)
+
+    def test_interp_escape_braces_python_target(self):
+        out = run_capture('x: Any = 1\nprint($"{{x}}")\n')
+        self.assertIn("{x}", out)
+
+    def test_interp_call_expr_vm(self):
+        out = run_vm('s: Any = "abc"\nprint($"len={len(s)}")\n')
+        self.assertIn("len=3", out)
+
+
+def run_vm(source, argv=None):
+    from externum import VM as _VM
+    out = io.StringIO()
+    _VM(stdout=out, argv=argv or []).run_source(source)
+    return out.getvalue()
+
+
+if __name__ == "__main__":
+    unittest.main()
