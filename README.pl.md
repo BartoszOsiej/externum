@@ -147,7 +147,7 @@ lib/                  # Standardowa biblioteka (.ext) — w tym drm.ext
 lib/drm.ext           # DRM stdlib: sign / verify / watermark w Externum
 examples/             # hello, calc, pokedex, hardcore.ext
 tests/                # 167 testów jednostkowych
-WIKI.md               # Specyfikacja języka
+docs/WIKI.md          # Specyfikacja języka
 ```
 
 ## Roadmap

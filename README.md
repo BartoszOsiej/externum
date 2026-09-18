@@ -20,7 +20,17 @@ and Bash system control. The compiler is written in Externum itself — bootstra
 Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 ```
 
-> 🇵🇱 [Wersja polska](README.pl.md) · [Documentation](https://bartoszosiej.github.io/Docs/projects/externum/) · [Language Spec (WIKI)](WIKI.md) · [![Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/BartoszOsiej/externum)
+> 🇵🇱 [Wersja polska](README.pl.md) · [Documentation](https://bartoszosiej.github.io/Docs/projects/externum/) · [Language Spec](docs/WIKI.md) · [![Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/BartoszOsiej/externum)
+
+<p align="center">
+  <a href="https://bartoszosiej.github.io/externum/"><b>▶ Try in your browser — no install</b></a>
+</p>
+
+<p align="center">
+  <img src="assets/repl.gif" alt="Externum REPL — live in the terminal" width="49%">
+  <img src="assets/compile.gif" alt="Compiling Externum to Python, Bash and a standalone binary" width="49%">
+</p>
+
 
 ---
 
@@ -220,7 +230,7 @@ lib/                  # Standard library (.ext)
 tools/                # Tooling in Externum
 examples/             # hello, calc, pokedex, hardcore.ext
 tests/                # 307 unit tests
-WIKI.md               # Language specification
+docs/WIKI.md          # Language specification
 ```
 
 ---
@@ -248,18 +258,6 @@ docker run -it externum repl
 
 ---
 
-## Verify
-
-One-click verification of cosign signatures, SLSA attestation, and SBOM
-for any release artifact:
-
-```bash
-curl -sL https://raw.githubusercontent.com/BartoszOsiej/externum/main/verify.sh | bash
-# or
-./verify.sh
-```
-
----
 
 ## Why?
 
@@ -273,5 +271,5 @@ MIT
 ## Deep Dives
 
 Extended dossiers (architecture, verification, benchmarks, error codex) ship in this repo:
-- [ERROR_CODEX.md](ERROR_CODEX.md)
+- [docs/ERROR_CODEX.md](docs/ERROR_CODEX.md)
 - [SECURITY.md](SECURITY.md)

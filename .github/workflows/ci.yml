@@ -237,7 +237,7 @@ jobs:
           python-version: "3.12"
       - name: Verify documentation files exist
         run: |
-          for f in README.md WIKI.md CONTRIBUTING.md LICENSE SECURITY.md; do
+          for f in README.md docs/WIKI.md CONTRIBUTING.md LICENSE SECURITY.md; do
             if [ -f "$f" ]; then
               echo "✓ $f exists ($(wc -l < "$f") lines)"
             else
