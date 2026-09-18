@@ -265,6 +265,29 @@ Because most languages force you to choose: readable or fast, scripting or syste
 
 ---
 
+## Benchmarks
+
+Measured on Intel i7-4610M (3.00 GHz), Arch Linux, CPython 3.14.7 —
+median of 30 runs (`examples/hello.ext`, typed bindings + inline Bash):
+
+| Scenario | Time |
+|---|---|
+| `externum compile` (.ext → Python target) | **78 ms** |
+| `externum run` (lex + parse + compile + exec) | **95 ms** |
+| `bin/externum run` (6 KB bootstrap, self-hosted path) | **63 ms** |
+| Running the compiled `.py` directly | **36 ms** |
+
+| Artifact | Size |
+|---|---|
+| `hello.ext` source | 177 B |
+| Compiled `hello.py` | 161 B |
+| `bin/externum` bootstrap (the only Python needed) | 6.4 KB |
+
+The full toolchain — lexer, parser, bytecode compiler, VM and runtime —
+bootstraps from a 6.4 KB Python stub; everything else is written in Externum.
+
+---
+
 ## License
 
 MIT
