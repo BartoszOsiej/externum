@@ -3,7 +3,8 @@ name: Deploy Playground (Pages)
 on:
   push:
     branches:
-      - main:
+      - main
+
 
 permissions: read-all
 
