@@ -11,7 +11,7 @@ if os.path.isfile(_readme):
 
 setup(
     name="externum",
-    version="2.0.0",
+    version="4.0.0",
     description="A self-hosted programming language blending Python readability, binary performance, and Bash control",
     long_description=_long_description,
     long_description_content_type="text/markdown",

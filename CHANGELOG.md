@@ -2,6 +2,20 @@
 
 All notable changes to Externum will be documented in this file.
 
+## [4.0.0] - 2026-09-19
+
+### Fixed
+- `externum file.ext --target bash` crashed with "list indices must be integers
+  or slices, not str" — `Compiler.compile()` now returns a dict for single
+  targets, matching what the CLI always expected. The bash target has never
+  worked through the CLI before this release.
+- Unknown `--target` values now raise a clear `ValueError` instead of
+  returning an empty string.
+
+### Changed
+- Docs: test counts unified to the actual suite size (366), Why? section and a
+  real end-to-end ASCII demo moved to the top of the README.
+
 ## [0.3.0] - 2026-09-15
 
 ### Added
