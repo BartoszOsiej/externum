@@ -407,13 +407,78 @@ class TestMoreFeatures(unittest.TestCase):
         code, warnings = BashCodegen(ast).generate()
         self.assertIn("while", code)
         self.assertIn("i=$(( i + 1 ))", code)
-        self.assertIn("echo ${i}", code)
+        self.assertIn('echo "${i}"', code)
         self.assertEqual(warnings, [])
 
         # unsupported statements produce warnings, never silent emptiness
-        ast2 = list(Parser(Lexer("def f(n: Int) -> Int:\n    return n\nprint(f(1))\n").tokenize()).parse())
+        # (`def` compiles since v4.2.1 — use an unsupported construct)
+        ast2 = list(
+            Parser(Lexer("class Counter:\n    mut n: Int = 0\nprint(\"after\")\n").tokenize()).parse()
+        )
         code2, warnings2 = BashCodegen(ast2).generate()
         self.assertTrue(any("not supported" in w for w in warnings2))
+        self.assertIn("echo 'after'", code2)
+
+    def _run_bash(self, src: str) -> str:
+        """Compile src to bash and execute the generated script for real."""
+        import subprocess
+        import tempfile
+
+        from externum.bash_backend import BashCodegen
+        from externum.lexer import Lexer
+        from externum.parser import Parser
+
+        ast = list(Parser(Lexer(src).tokenize()).parse())
+        code, _warnings = BashCodegen(ast).generate()
+        with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as fh:
+            fh.write(code)
+            path = fh.name
+        try:
+            proc = subprocess.run(["bash", path], capture_output=True, text=True, timeout=30)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            return proc.stdout
+        finally:
+            os.unlink(path)
+
+    def test_bash_functions_recursion(self):
+        # v4.2.1: def/fn → real bash functions; recursion via $( ) capture.
+        src = (
+            "def fact(n: Int) -> Int:\n"
+            "    if n <= 1:\n"
+            "        return 1\n"
+            "    return n * fact(n - 1)\n"
+            "print(fact(6))\n"
+        )
+        self.assertEqual(self._run_bash(src).strip(), "720")
+
+    def test_bash_functions_defaults_and_concat(self):
+        q = '"'
+        src = (
+            f"def greet(name: Str, suffix: Str = {q}!{q}) -> Str:\n"
+            f"    return {q}Hello, {q} + name + suffix\n"
+            f"print(greet({q}World{q}))\n"
+            f"print(greet({q}HN{q}, {q}?{q}))\n"
+            f"mut s: Str = {q}pipe{q} + {q}line{q}\n"
+            f"print(s)\n"
+        )
+        out = self._run_bash(src)
+        self.assertEqual(
+            [line for line in out.splitlines() if line],
+            ["Hello, World!", "Hello, HN?", "pipeline"],
+        )
+
+    def test_bash_function_statement_call_discards_value(self):
+        # A bare call to a value-returning function discards the captured
+        # value — matching the Python target's semantics.
+        src = (
+            "def f(n: Int) -> Int:\n"
+            "    return n * 2\n"
+            "def show(n: Int):\n"
+            "    print(n + 1)\n"
+            "f(21)\n"
+            "show(9)\n"
+        )
+        self.assertEqual(self._run_bash(src).strip(), "10")
 
 
 if __name__ == "__main__":

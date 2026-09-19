@@ -2,6 +2,25 @@
 
 All notable changes to Externum will be documented in this file.
 
+## [4.2.1] - 2026-09-19
+
+### Added
+- **Functions in the bash target** (`--target bash`): `def`/`fn` compile to real bash
+  functions — positional params bound with `local`, default params via
+  `local p="${N:-default}"`, `return <expr>` emitted as `printf '%s\n'` + `return 0`
+  and captured through command substitution `$( f args )`. **Recursion works**
+  (every local is dynamic per invocation). String concatenation (`s + "!"`, including
+  in `return`/`print`) renders as a single double-quoted word. Bare calls to
+  value-returning functions discard the result (`> /dev/null`), matching the Python
+  target's semantics. A compile-time warning fires when a function both prints and
+  returns a value (the two streams share stdout in bash).
+- 3 new end-to-end tests that execute the generated bash (recursion → 720, defaults +
+  string concat, statement-call discards value). Suite: 379.
+
+### Fixed
+- f-string gotcha in codegen: `${i:-default}` inside an f-string was parsed as a
+  format spec (`Unknown format code '!'`) — escaped braces now.
+
 ## [4.2.0] - 2026-09-19
 
 ### Added
