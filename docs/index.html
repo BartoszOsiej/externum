@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://bartoszosiej.github.io/css/aegis.css">
 <link rel="canonical" href="https://bartoszosiej.github.io/externum/">
 <link rel="author" href="https://bartoszosiej.github.io/#person">
+<link rel="me" href="https://t.me/hartwell_info">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Bartosz Osiej">
 <meta property="og:title" content="Externum — Live Playground · a language you can extend from the browser">
@@ -27,20 +28,17 @@
   "applicationSubCategory": "Programming language / compiler",
   "operatingSystem": "Cross-platform",
   "programmingLanguage": ["Python"],
-  "softwareVersion": "3.0",
+  "softwareVersion": "4.0",
   "license": "https://opensource.org/licenses/MIT",
   "codeRepository": "https://github.com/BartoszOsiej/externum",
   "author": { "@id": "https://bartoszosiej.github.io/#person" },
   "creator": { "@id": "https://bartoszosiej.github.io/#person" },
-  "description": "A programming language with three compilation targets: Python, Bash and native binaries. 192 automated tests.",
+  "description": "A programming language with three compilation targets: Python, Bash and bytecode. ~380 automated tests, differential backend harness in CI.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
 </script>
 </head>
 <body data-page="externum">
-<div class="bg-blob b1"></div>
-<div class="bg-blob b2"></div>
-<div class="bg-blob b3"></div>
 
 <header>
   <div class="brand">
@@ -54,14 +52,15 @@
     <a href="https://github.com/BartoszOsiej/externum" target="_blank" rel="noopener">GitHub</a>
     <a href="https://pypi.org/project/externum/" target="_blank" rel="noopener">PyPI</a>
     <a href="https://bartoszosiej.github.io/Docs/docs/externum" target="_blank" rel="noopener">Docs</a>
+    <a href="https://t.me/hartwell_info" target="_blank" rel="noopener">Telegram</a>
   </nav>
 </header>
 
 <main>
   <section class="tabs" role="tablist">
-    <button class="tab active" data-tab="run" role="tab">▶ Run</button>
-    <button class="tab" data-tab="extend" role="tab">🧬 Extend the language</button>
-    <button class="tab" data-tab="compile" role="tab">⚙ Compiled targets</button>
+    <button class="tab active" data-tab="run" role="tab">[01]_RUN</button>
+    <button class="tab" data-tab="extend" role="tab">[02]_EXTEND_LANGUAGE</button>
+    <button class="tab" data-tab="compile" role="tab">[03]_COMPILED_TARGETS</button>
   </section>
 
   <!-- ============ RUN TAB ============ -->
@@ -96,7 +95,7 @@
   <!-- ============ EXTEND TAB ============ -->
   <section id="panel-extend" class="panel">
     <div class="extend-intro">
-      <h2>🧬 Hot-patch the language</h2>
+      <h2>HOT-PATCH THE LANGUAGE</h2>
       <p>
         Write an Externum module (or just <i>describe</i> one) and load it into the runtime
         <b>while it is running</b>. Your module becomes importable instantly:
@@ -162,7 +161,7 @@
 
 <footer>
   <span id="status" class="status idle">Runtime not loaded yet — press Run or Compile.</span>
-  <span class="right">Externum 3.0 “Sentient” · Pyodide (WASM CPython) · no telemetry, no server</span>
+  <span class="right">Externum 4.0 · Pyodide (WASM CPython) · no telemetry, no server · <a href="https://t.me/hartwell_info" style="color:var(--acc1);text-decoration:none">t.me/hartwell_info</a></span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
