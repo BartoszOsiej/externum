@@ -1503,3 +1503,51 @@ class BytecodeCompiler:
         if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
             return s[1:-1]
         return s
+
+
+# ── EXBC artifact serialization ──────────────────────────────────────
+# A .exbc artifact is a self-contained, source-free representation of a
+# BytecodeModule: magic header + version + pickle payload. The VM can run
+# it directly (externum run app.exbc) without lexing/parsing/compiling —
+# the same mechanism that backs the DRM story (source never ships).
+
+EXBC_MAGIC = b"EXBC"
+EXBC_FORMAT_VERSION = 1
+
+
+def module_to_bytes(module: BytecodeModule) -> bytes:
+    """Serialize a BytecodeModule to an .exbc artifact."""
+    import pickle
+
+    payload = pickle.dumps(module, protocol=pickle.HIGHEST_PROTOCOL)
+    header = EXBC_MAGIC + EXBC_FORMAT_VERSION.to_bytes(2, "big") + len(payload).to_bytes(8, "big")
+    return header + payload
+
+
+def module_from_bytes(data: bytes) -> BytecodeModule:
+    """Deserialize an .exbc artifact back into a BytecodeModule."""
+    import pickle
+
+    if len(data) < 14 or data[:4] != EXBC_MAGIC:
+        raise ValueError("not an EXBC artifact (bad magic)")
+    version = int.from_bytes(data[4:6], "big")
+    if version != EXBC_FORMAT_VERSION:
+        raise ValueError(f"unsupported EXBC artifact version: {version}")
+    payload_len = int.from_bytes(data[6:14], "big")
+    payload = data[14:]
+    if len(payload) != payload_len:
+        raise ValueError(f"corrupt EXBC artifact: expected {payload_len} bytes, got {len(payload)}")
+    module = pickle.loads(payload)
+    if not isinstance(module, BytecodeModule):
+        raise ValueError("corrupt EXBC artifact: wrong payload type")
+    return module
+
+
+def save_module(module: BytecodeModule, path: str) -> None:
+    with open(path, "wb") as fh:
+        fh.write(module_to_bytes(module))
+
+
+def load_module(path: str) -> BytecodeModule:
+    with open(path, "rb") as fh:
+        return module_from_bytes(fh.read())

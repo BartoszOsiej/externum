@@ -94,7 +94,7 @@ Linux 7.2.4-arch1-2
 
 ```bash
 pip install externum        # PyPI
-externum --version          # Externum 4.0.0
+externum --version          # Externum 4.1.0
 
 # From source
 git clone https://github.com/BartoszOsiej/externum.git
@@ -116,6 +116,10 @@ externum ide myprogram.ext
 
 # REPL
 externum repl
+
+# Compile to a runnable .exbc artifact (no source needed to run it)
+externum examples/hello.ext --target bytecode -o hello.exbc
+externum run hello.exbc
 
 # Compile to all targets
 externum examples/hello.ext
@@ -243,7 +247,7 @@ EXTERNUM_LICENSE=<key> externum run app.ext --protect --app-id game --author buf
 externum/
 ├── lexer.py          # Tokenization (bracket-aware, bash, f-strings)
 ├── parser.py         # Full grammar → AST
-├── bytecode.py       # Bytecode compiler (EXBC format)
+├── bytecode.py       # Bytecode compiler (EXBC format) + .exbc artifact I/O
 ├── compiler.py       # Python/Bash transpiler
 ├── vm.py             # Bytecode virtual machine
 ├── typesys.py        # Static type checker

@@ -2,6 +2,21 @@
 
 All notable changes to Externum will be documented in this file.
 
+## [4.1.0] - 2026-09-19
+
+### Added
+- **Real bytecode artifacts**: `externum app.ext --target bytecode -o app.exbc`
+  emits a self-contained `.exbc` file (magic header `EXBC` + version + payload).
+  Run it with `externum run app.exbc` — the VM loads and executes it directly,
+  skipping lexer/parser/compiler entirely. The source file never needs to ship.
+- `module_to_bytes` / `module_from_bytes` / `save_module` / `load_module` in
+  `externum.bytecode`, with magic/version/length validation.
+- 2 new tests (artifact roundtrip executes identically; garbage rejection).
+
+### Fixed
+- (4.0.0) `--target bash` never worked; single-target `compile()` API now
+  returns a dict — see 4.0.0 notes.
+
 ## [4.0.0] - 2026-09-19
 
 ### Fixed

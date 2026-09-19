@@ -19,8 +19,10 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   externum run program.ext [args...]   # execute a program
+  externum run app.exbc [args...]      # run a precompiled .exbc artifact
   externum repl                        # interactive shell
   externum program.ext --target python # compile to Python
+  externum program.ext --target bytecode -o app.exbc  # compile to a runnable artifact
   externum program.ext -o out.py       # compile to a file
         """,
     )
@@ -100,6 +102,9 @@ _last_source: list[str] = [""]
 
 def cmd_run(args) -> None:
     backend = getattr(args, "backend", "vm")
+    if args.file.endswith(".exbc"):
+        cmd_vm(args)
+        return
     if backend == "vm":
         cmd_vm(args)
         return
@@ -187,6 +192,21 @@ def cmd_compile(args) -> None:
                 "secret": args.secret or "externum-drm",
                 "build_id": args.build_id,
             }
+        if args.target == "bytecode":
+            # Compile to a self-contained .exbc artifact: magic header +
+            # serialized EXBC module. Runnable via `externum run app.exbc`
+            # without lexing/parsing/compiling (and without the source).
+            import os
+
+            from .bytecode import save_module
+
+            tokens = Lexer(source).tokenize()
+            ast = list(Parser(tokens).parse())
+            module = BytecodeCompiler(ast, module_name=args.file).compile()
+            out_path = args.output or os.path.splitext(args.file)[0] + ".exbc"
+            save_module(module, out_path)
+            print(f"Output written to {out_path}")
+            return
         rt = Runtime()
         py = rt.compile_to_python(source, protect=protect)
         if args.target == "all":
@@ -244,6 +264,14 @@ def cmd_compile(args) -> None:
 
 def cmd_vm(args) -> None:
     """Run via the native EXBC virtual machine."""
+    if args.file.endswith(".exbc"):
+        # Precompiled artifact — skip lexer/parser/compiler entirely.
+        from .bytecode import load_module
+
+        module = load_module(args.file)
+        vm = VM(argv=list(getattr(args, "args", []) or []))
+        vm.run_module(module)
+        return
     source = _read_source(args.file)
     _last_source[0] = source
     vm = None

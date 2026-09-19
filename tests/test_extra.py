@@ -257,6 +257,45 @@ class TestMoreFeatures(unittest.TestCase):
         result = self._compile('`echo hello-from-bash`\n', "bash")
         self.assertIn("echo hello-from-bash", result["bash"])
 
+    # ---- EXBC artifacts: compile --target bytecode -> save -> load -> run
+
+    def test_exbc_artifact_roundtrip_runs(self):
+        import contextlib
+        import io
+        import tempfile
+
+        from externum.bytecode import BytecodeCompiler, load_module, module_to_bytes, save_module
+        from externum.vm import VM
+
+        source = 'x: Int = 0b1010\ny: Int = 42\nprint($"sum={x+y}")\n'
+        ast = list(Parser(Lexer(source).tokenize()).parse())
+        module = BytecodeCompiler(ast, module_name="artifact.ext").compile()
+
+        with tempfile.NamedTemporaryFile(suffix=".exbc", delete=False) as fh:
+            path = fh.name
+        try:
+            save_module(module, path)
+            with open(path, "rb") as fh:
+                blob = fh.read()
+            self.assertTrue(blob.startswith(b"EXBC"))
+            loaded = load_module(path)
+            self.assertEqual(module_to_bytes(loaded), blob)  # stable roundtrip
+
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                VM().run_module(loaded)
+            self.assertIn("sum=52", out.getvalue())
+        finally:
+            os.unlink(path)
+
+    def test_exbc_artifact_rejects_garbage(self):
+        from externum.bytecode import module_from_bytes
+
+        with self.assertRaises(ValueError):
+            module_from_bytes(b"NOPE" + b"\x00" * 30)
+        with self.assertRaises(ValueError):
+            module_from_bytes(b"EXBC" + (99).to_bytes(2, "big") + b"\x00" * 20)
+
 
 if __name__ == "__main__":
     unittest.main()
