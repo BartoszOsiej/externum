@@ -39,15 +39,17 @@ Sources: [`bench.ext`](bench.ext) / [`bench.py`](bench.py) / [`bench.sh`](bench.
 
 Compile-only cost (`externum compile hello.ext`): **78 ms**.
 
-## Known VM limitations (why the loop benchmarks use the Python-backend path)
+## The VM path (fixed in v4.2)
 
-The EXBC VM currently executes this exact program incorrectly — tracked honestly, not hidden:
+This exact program used to hang `externum vm` — augmented assignment stored into a frame
+nothing ever read ([#21](https://github.com/BartoszOsiej/externum/issues/21)), and parenthesized
+right-hand sides raised `undefined global`
+([#22](https://github.com/BartoszOsiej/externum/issues/22)). Both are fixed in v4.2 and the VM
+now executes `bench.ext` correctly (verified: same `999000000`).
 
-- [#21 — augmented assignment (`+=`) never stores the value → silent infinite loop](https://github.com/BartoszOsiej/externum/issues/21)
-- [#22 — parenthesized RHS in an assignment treated as a variable name](https://github.com/BartoszOsiej/externum/issues/22)
-
-The default `externum run` path (transpile to Python) executes everything correctly, which is
-what the tables above measure.
+Honest VM performance on this workload: the tree-walking VM runs the 2M-iteration loop in
+~16 s (~30× slower than the transpile path) — the VM exists for the artifact/DRM use-case
+(run without source), not for CPU-bound work.
 
 ## Reproduce
 

@@ -2,14 +2,14 @@
 
 <div align="center">
 
-[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=Programming%20language%20%E2%80%94%20compiles%20to%20Python%2C%20Bash%2C%20binary.%20366%20tests%2C%20browser%20REPL%2C%20DRM%2C%20ownership%2Btraits%20)](https://github.com/BartoszOsiej/externum)
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=Programming%20language%20%E2%80%94%20compiles%20to%20Python%2C%20Bash%2C%20binary.%20376%20tests%2C%20browser%20REPL%2C%20DRM%2C%20ownership%2Btraits%20)](https://github.com/BartoszOsiej/externum)
 
 </div># ⚡ Externum
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
 ![PyPI](https://img.shields.io/badge/PyPI-externum%402.0.0-3776AB?style=flat-square&logo=pypi)
-![Tests](https://img.shields.io/badge/Tests-366%20✓-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-376%20✓-brightgreen?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](https://github.com/BartoszOsiej/externum/blob/main/LICENSE)
 
@@ -126,8 +126,22 @@ externum examples/hello.ext
 
 # Compile to Python / Bash
 externum examples/hello.ext --target python -o hello.py
-externum examples/hello.ext --target bash
+externum examples/hello.ext --target bash   # real bash: loops, arithmetic, if/for/while, print
 ```
+
+### What's new in v4.2
+
+- **`|>` pipeline operator** — `x |> f(a, b)` means `f(x, a, b)`; works in the Python target
+  and on the VM (chaining works because precedence binds left: `x |> f |> g` is `g(f(x))`)
+- **`fn` keyword** — `fn name(args) -> T:` is now an alias for `def` (Rust-flavored spelling)
+- **Real bash target** — `--target bash` translates module-level Externum logic (arithmetic,
+  `while`/`for range`, `if/elif/else`, `print`, embedded `bash { ... }` blocks verbatim) into a
+  standalone `set -euo pipefail` script. Unsupported statements emit **warnings** — the target
+  never silently produces an empty script again
+- **VM bugfixes** — augmented assignment at module top level no longer silently discards the
+  write (infinite loops, [#21](https://github.com/BartoszOsiej/externum/issues/21)); parenthesized
+  right-hand sides no longer raise `undefined global` ([#22](https://github.com/BartoszOsiej/externum/issues/22));
+  `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=` lex correctly; `PIPE_CALL` dispatches user functions
 
 ---
 
@@ -257,7 +271,7 @@ externum/
 lib/                  # Standard library (.ext)
 tools/                # Tooling in Externum
 examples/             # hello, calc, pokedex, hardcore.ext
-tests/                # 366 unit tests
+tests/                # 376 unit tests
 docs/WIKI.md          # Language specification
 ```
 
@@ -266,7 +280,7 @@ docs/WIKI.md          # Language specification
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 366 tests
+python3 -m unittest discover -s tests -v   # 376 tests
 ```
 
 ---

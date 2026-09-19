@@ -224,9 +224,12 @@ def cmd_compile(args) -> None:
         else:
             tokens = Lexer(source).tokenize()
             ast = list(Parser(tokens).parse())
-            result = Compiler(ast).compile(args.target)
+            comp = Compiler(ast)
+            result = comp.compile(args.target)
             if args.target == "bash":
                 result = result["bash"]
+                for w in comp.warnings:
+                    print(f"warning: {w}", file=sys.stderr)
             elif args.target == "binary":
                 result = result["binary"]
     except SyntaxError as exc:

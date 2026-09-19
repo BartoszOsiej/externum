@@ -296,6 +296,125 @@ class TestMoreFeatures(unittest.TestCase):
         with self.assertRaises(ValueError):
             module_from_bytes(b"EXBC" + (99).to_bytes(2, "big") + b"\x00" * 20)
 
+    def _run_vm(self, src: str) -> str:
+        from externum.bytecode import BytecodeCompiler
+        from externum.lexer import Lexer
+        from externum.parser import Parser
+        from externum.vm import VM
+
+        ast = Parser(Lexer(src).tokenize()).parse()
+        module = BytecodeCompiler(ast).compile()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            VM().run_module(module)
+        return out.getvalue()
+
+    def test_vm_aug_assign_module_level(self):
+        # Issue #21: at module top level, AUG_ASSIGN stored to a local frame
+        # nothing ever reads — loop counters never advanced (silent hang).
+        self.assertEqual(
+            self._run_vm("mut i: Int = 0\nwhile i < 3:\n    i += 1\nprint(i)\n").strip(),
+            "3",
+        )
+
+    def test_vm_aug_assign_operator_semantics(self):
+        # Issue #21 (related): the parser reports "*=", the op_map had "*" —
+        # every augmented op except += silently degraded to addition.
+        self.assertEqual(self._run_vm("mut x: Int = 3\nx *= 4\nprint(x)\n").strip(), "12")
+        self.assertEqual(self._run_vm("mut x: Int = 10\nx -= 4\nprint(x)\n").strip(), "6")
+        self.assertEqual(self._run_vm("mut x: Int = 13\nx %= 5\nprint(x)\n").strip(), "3")
+
+    def test_vm_aug_assign_in_function(self):
+        src = (
+            "def count(n: Int) -> Int:\n"
+            "    mut acc: Int = 0\n"
+            "    mut k: Int = 0\n"
+            "    while k < n:\n"
+            "        acc += k\n"
+            "        k += 1\n"
+            "    return acc\n"
+            "print(count(5))\n"
+        )
+        self.assertEqual(self._run_vm(src).strip(), "10")
+
+    def test_vm_parenthesized_rhs(self):
+        # Issue #22: parenthesized RHS text fell through to _compile_name
+        # ("undefined global (((...)))").
+        src = (
+            "mut total: Int = 0\n"
+            "mut i: Int = 0\n"
+            "while i < 5:\n"
+            "    total = total + ((i * 3 + 7) % 1000)\n"
+            "    i = i + 1\n"
+            "print(total)\n"
+        )
+        self.assertEqual(self._run_vm(src).strip(), "65")
+        # same but with the augmented form
+        src2 = (
+            "mut total: Int = 0\n"
+            "mut i: Int = 0\n"
+            "while i < 5:\n"
+            "    total += ((i * 3 + 7) % 1000)\n"
+            "    i += 1\n"
+            "print(total)\n"
+        )
+        self.assertEqual(self._run_vm(src2).strip(), "65")
+
+    def _compile_py(self, src: str) -> str:
+        from externum.compiler import Compiler
+        from externum.lexer import Lexer
+        from externum.parser import Parser
+
+        return Compiler(list(Parser(Lexer(src).tokenize()).parse())).compile("python")["python"]
+
+    def test_pipe_operator_python_target(self):
+        # v4.2: `x |> f(a, b)` desugars to `f(x, a, b)` in the transpiler.
+        src = (
+            "def double2(n: Int, m: Int) -> Int:\n"
+            "    return n * m\n"
+            "mut r: Int = 5 |> double2(3)\n"
+            "print(r)\n"
+        )
+        self.assertIn("double2(5, 3)", self._compile_py(src))
+
+    def test_pipe_operator_vm(self):
+        src = (
+            "def double2(n: Int, m: Int) -> Int:\n"
+            "    return n * m\n"
+            "mut r: Int = 5 |> double2(3)\n"
+            "print(r)\n"
+        )
+        self.assertEqual(self._run_vm(src).strip(), "15")
+
+    def test_fn_alias(self):
+        # v4.2: `fn` is accepted as an alias for `def`.
+        src = (
+            "fn triple(n: Int) -> Int:\n"
+            "    return n * 3\n"
+            "print(4 |> triple())\n"
+        )
+        self.assertEqual(self._run_vm(src).strip(), "12")
+        self.assertIn("triple(4)", self._compile_py(src))
+
+    def test_bash_backend_loop(self):
+        # v4.2: the bash target translates real Externum logic instead of
+        # emitting an empty script (#19 follow-up).
+        from externum.bash_backend import BashCodegen
+        from externum.lexer import Lexer
+        from externum.parser import Parser
+
+        ast = list(Parser(Lexer("mut i: Int = 0\nwhile i < 3:\n    i += 1\nprint(i)\n").tokenize()).parse())
+        code, warnings = BashCodegen(ast).generate()
+        self.assertIn("while", code)
+        self.assertIn("i=$(( i + 1 ))", code)
+        self.assertIn("echo ${i}", code)
+        self.assertEqual(warnings, [])
+
+        # unsupported statements produce warnings, never silent emptiness
+        ast2 = list(Parser(Lexer("def f(n: Int) -> Int:\n    return n\nprint(f(1))\n").tokenize()).parse())
+        code2, warnings2 = BashCodegen(ast2).generate()
+        self.assertTrue(any("not supported" in w for w in warnings2))
+
 
 if __name__ == "__main__":
     unittest.main()

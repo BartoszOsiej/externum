@@ -1004,9 +1004,15 @@ class VM:
 
             elif op == PIPE_CALL:
                 # pipe: a |> f  → stack has [a, f], call f(a)
+                # (v4.2: user-defined functions and closures route through the
+                # same dispatch as CALL instead of raising "cannot call".)
                 fn = stack.pop()
                 arg = stack.pop()
-                if callable(fn):
+                if isinstance(fn, ExternumClosure):
+                    stack.append(self.run_function(fn.fn, [arg], upvalues=fn.upvalues))
+                elif isinstance(fn, BytecodeFunction):
+                    stack.append(self.run_function(fn, [arg], fn_obj=fn))
+                elif callable(fn):
                     stack.append(fn(arg))
                 else:
                     raise ExternumError(f"pipe: cannot call {fn!r}")

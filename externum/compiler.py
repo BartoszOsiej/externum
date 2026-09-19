@@ -13,6 +13,16 @@ class Compiler:
         self.indent = 0
 
     def compile(self, target: str = "all"):
+        # v4.2: the bash target comes from the real BashCodegen (loops,
+        # arithmetic, if/for/while, print, embedded bash blocks verbatim).
+        # The old pass-through emitted nothing for Externum logic — that is
+        # how `--target bash` produced empty scripts (#19 follow-up).
+        from .bash_backend import BashCodegen
+
+        bash_gen = BashCodegen(self.ast)
+        bash_src, bash_warnings = bash_gen.generate()
+        self.warnings = bash_warnings
+
         for node in self.ast:
             self._compile_node(node)
 
@@ -21,7 +31,7 @@ class Compiler:
 
         parts = {
             "python": "\n".join(self.output["python"]),
-            "bash": "\n".join(self.output["bash"]),
+            "bash": bash_src,
             "binary": "\n".join(self.output["binary"]),
         }
         if target == "all":
@@ -620,6 +630,34 @@ class Compiler:
         if not node:
             return "None"
         t = node.type
+        if t == "BINOP":
+            # `x |> f(a, b)` desugars to `f(x, a, b)` (v4.2). Other BINOPs
+            # carry verbatim Python source in .value (incl. the ternary),
+            # which is valid as-is.
+            op_node = node.children[1] if len(node.children) > 1 else None
+            if op_node is not None and op_node.value == "|>":
+                left = self._value_to_str(node.children[0]) if node.children else "None"
+                right = node.children[2] if len(node.children) > 2 else None
+                if right is None:
+                    return left
+                if right.type == "CALL":
+                    fn_name = right.value
+                    piped_args = ", ".join([left] + [self._value_to_str(c) for c in right.children])
+                else:
+                    fn_name = self._value_to_str(right)
+                    piped_args = left
+                helper = {
+                    "alloc": f"_ext_alloc({piped_args})",
+                    "free": f"_ext_free({piped_args})",
+                    "addr": f"_ext_addr({piped_args})",
+                    "sizeof": f"_ext_sizeof({piped_args})",
+                    "copy": piped_args,
+                    "chan": f"_ext_chan({piped_args})",
+                    "send": f"_ext_send({piped_args})",
+                    "recv": f"_ext_recv({piped_args})",
+                }
+                return helper.get(fn_name, f"{fn_name}({piped_args})")
+            return str(node.value)
         if t == "NUMBER":
             return str(node.value)
         if t == "BINARY_NUMBER":

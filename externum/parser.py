@@ -151,7 +151,8 @@ class Parser:
             return ASTNode("BASH_BLOCK", value=tok.value)
         if t == "BASH_COMMAND":
             return self._parse_bash_command()
-        if t == "DEF":
+        if t in ("DEF", "FN"):
+            # `fn` is an alias for `def` (v4.2): fn name(params) -> T: body
             return self._parse_function_def()
         if t == "CLASS":
             return self._parse_class_def()
@@ -279,7 +280,7 @@ class Parser:
                 self.pos += 1
                 val = self._parse_expression()
                 return ASTNode("ASSIGN", children=[expr, val])
-            if nxt.type in ("+=", "-=", "*=", "/=", "//=", "**=", "&=", "|=", "^=", "<<=", ">>="):
+            if nxt.type in ("+=", "-=", "*=", "/=", "%=", "//=", "**=", "&=", "|=", "^=", "<<=", ">>="):
                 op = nxt.value
                 self.pos += 1
                 val = self._parse_expression()

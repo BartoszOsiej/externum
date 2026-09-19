@@ -387,33 +387,61 @@ class BytecodeCompiler:
     def _stmt_AUG_ASSIGN(self, node: ASTNode):
         target = node.children[0] if node.children else None
         val = node.children[1] if len(node.children) > 1 else None
-        op = node.children[2].value if len(node.children) > 2 else "+"
-        if target and target.type == "IDENTIFIER":
-            self._compile_name(target.value)
-        if val:
-            self._compile_expr(val)
-        op_map = {
-            "+": ADD,
-            "-": SUB,
-            "*": MUL,
-            "/": DIV,
-            "%": MOD,
-            "**": POW,
-            "//": FLOOR_DIV,
-            "&": BITAND,
-            "|": BITOR,
-            "^": BITXOR,
-            "<<": LSHIFT,
-            ">>": RSHIFT,
-        }
-        self._emit(op_map.get(op, ADD))
-        name = target.value if target and target.type == "IDENTIFIER" else ""
-        kind, _ = self._resolve(name) if name else ("global", 0)
-        idx = self._add_const(name) if name else 0
-        if kind == "global":
-            self._emit(STORE_GLOBAL, idx)
+        op_node = node.children[2] if len(node.children) > 2 else None
+        op = str(op_node.value) if op_node is not None else "+"
+        # The parser reports augmented operators with their "=" suffix
+        # ("+=", "**=", "//=", "<<=").  Strip it so the op_map lookup
+        # sees the base binary operator (issue #21).
+        base_op = op[:-1] if op.endswith("=") and len(op) > 1 else op
+        if target is None:
+            return
+        if target.type == "IDENTIFIER":
+            name = target.value
+            self._compile_name(name)
+            if val:
+                self._compile_expr(val)
+            else:
+                self._emit(LOAD_CONST, self._add_const(None))
+            op_map = {
+                "+": ADD,
+                "-": SUB,
+                "*": MUL,
+                "/": DIV,
+                "%": MOD,
+                "**": POW,
+                "//": FLOOR_DIV,
+                "&": BITAND,
+                "|": BITOR,
+                "^": BITXOR,
+                "<<": LSHIFT,
+                ">>": RSHIFT,
+            }
+            self._emit(op_map.get(base_op, ADD))
+            kind, _ = self._resolve(name)
+            idx = self._add_const(name)
+            # Module top level has no locals frame: mirror _stmt_ASSIGN and
+            # _compile_name, which use the global slot when not inside a
+            # function.  Storing to a local here wrote into a frame nothing
+            # ever reads (silent infinite loops — issue #21).
+            if kind == "global" or self._current_fn is None:
+                self._emit(STORE_GLOBAL, idx)
+            else:
+                self._emit(STORE_VAR, idx)
+            self._declare_var(name)
         else:
-            self._emit(STORE_VAR, idx)
+            # obj.attr += v  /  x[i] += v  /  *p += v: desugar into
+            # "target = target <op> v" so the ASSIGN paths (SET_ATTR /
+            # SET_INDEX / STORE_DEREF) handle the store.  Previously these
+            # targets emitted no store at all (or corrupted the stack).
+            rhs = ASTNode(
+                "BINOP",
+                children=[
+                    target,
+                    ASTNode("OP", value=base_op),
+                    val if val is not None else ASTNode("NUMBER", value=0),
+                ],
+            )
+            self._stmt_ASSIGN(ASTNode("ASSIGN", children=[target, rhs]))
 
     def _stmt_FUNCTION(self, node: ASTNode):
         self._compile_function_def(node)
@@ -900,6 +928,22 @@ class BytecodeCompiler:
     def _expr_BINOP(self, node: ASTNode):
         op_node = node.children[1] if len(node.children) > 1 else None
         op = op_node.value if op_node else "+"
+        if op == "|>":
+            # x |> f(a, b)  →  f(x, a, b): emit [f, x, a, b] then CALL(argc+1);
+            # CALL pops argc args then the callee, so x lands as first arg.
+            left = node.children[0] if node.children else None
+            right = node.children[2] if len(node.children) > 2 else None
+            if right is not None and right.type == "CALL":
+                self._compile_name(right.value)
+                self._compile_expr(left)
+                for child in right.children:
+                    self._compile_expr(child)
+                self._emit1(CALL, len(right.children) + 1)
+            elif right is not None:
+                self._compile_expr(right)
+                self._compile_expr(left)
+                self._emit1(CALL, 1)
+            return
         if op == "if_else":
             # children: [true_value, OP, condition, false_value]
             self._compile_expr(node.children[2])  # condition
@@ -1196,6 +1240,17 @@ class BytecodeCompiler:
         if not expr:
             self._emit(LOAD_CONST, self._add_const(None))
             return
+        # Strip redundant outer parentheses: "((a + b) % c)" → "(a + b) % c".
+        # Only strip when the paren at position 0 closes at the LAST character;
+        # "(a) + (b)" keeps its top-level binop split (issue #22 — otherwise
+        # the whole parenthesized text fell through to _compile_name and the
+        # VM raised "undefined global").
+        while len(expr) >= 2 and expr[0] == "(" and expr[-1] == ")":
+            close = self._find_matching_paren(expr, 0)
+            if close == len(expr) - 1:
+                expr = expr[1:-1].strip()
+            else:
+                break
         # literal int
         try:
             self._emit(LOAD_CONST, self._add_const(int(expr)))
