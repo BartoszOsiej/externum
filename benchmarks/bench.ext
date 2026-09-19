@@ -1,0 +1,12 @@
+# Benchmark: arithmetic loop (CPU-bound)
+# 2,000,000 iterations of multiply-add with modular sum
+
+mut total: Int = 0
+mut i: Int = 0
+n: Int = 2000000
+
+while i < n:
+    total += (i * 3 + 7) % 1000
+    i += 1
+
+print(total)

@@ -299,6 +299,18 @@ median of 30 runs (`examples/hello.ext`, typed bindings + inline Bash):
 | `bin/externum run` (6 KB bootstrap, self-hosted path) | **63 ms** |
 | Running the compiled `.py` directly | **36 ms** |
 
+### CPU-bound loop (2M iterations of `(i*3+7) % 1000`) — [methodology](benchmarks/README.md)
+
+| Command | Mean | vs. Externum |
+|---|---|---|
+| `externum run` (lex → parse → transpile → exec) | **551 ms ± 42** | 1.00× |
+| compiled artifact executed directly | **458 ms** | 1.20× faster |
+| plain Python (idiomatic `for range`) | **340 ms ± 10** | 1.62× faster |
+| Bash (`$(( ))` arithmetic loop, no forks) | **6.16 s ± 0.06** | **11.2× slower** |
+
+Identical output verified for all three before timing. Full methodology, cold-start numbers
+and repro in [benchmarks/README.md](benchmarks/README.md).
+
 | Artifact | Size |
 |---|---|
 | `hello.ext` source | 177 B |
