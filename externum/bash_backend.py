@@ -394,6 +394,169 @@ class BashCodegen:
         self._emit("echo " + " ".join(parts) if parts else "echo")
 
     # ── words (single shell words: echo / [[ ]] / args) ─────────────
+
+    # ── expression emission fixes (#25) ─────────────────────────────
+    @staticmethod
+    def _strip_parens(text: str) -> str:
+        """Remove one outer paren pair: '(2 + 3)' -> '2 + 3'."""
+        text = text.strip()
+        if text.startswith("(") and text.endswith(")"):
+            depth = 0
+            for i, ch in enumerate(text):
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                    if depth == 0 and i != len(text) - 1:
+                        return text  # outer parens are not one pair
+            if depth == 0:
+                return text[1:-1].strip()
+        return text
+
+    def _fstring_parts(self, raw: str) -> list[tuple[str, str]] | None:
+        """Split an f-string literal into [("text", s) / ("expr", e), ...].
+
+        None when the literal contains format specs or escape sequences we
+        do not translate — the caller then falls back to the warning path
+        instead of emitting something subtly wrong.
+        """
+        quote = raw[1]
+        inner = raw[2:-1] if raw.endswith(quote) else raw[2:]
+        parts: list[tuple[str, str]] = []
+        buf = ""
+        i = 0
+        while i < len(inner):
+            ch = inner[i]
+            if ch == "\\":
+                if i + 1 < len(inner) and inner[i + 1] == quote:
+                    buf += quote
+                    i += 2
+                    continue
+                return None  # other escapes: not translated
+            if ch == "{" and i + 1 < len(inner) and inner[i + 1] == "{":
+                buf += "{"
+                i += 2
+                continue
+            if ch == "}" and i + 1 < len(inner) and inner[i + 1] == "}":
+                buf += "}"
+                i += 2
+                continue
+            if ch == "{":
+                if buf:
+                    parts.append(("text", buf))
+                    buf = ""
+                depth = 1
+                j = i + 1
+                while j < len(inner) and depth:
+                    if inner[j] == "{":
+                        depth += 1
+                    elif inner[j] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    j += 1
+                if depth:
+                    return None
+                expr = inner[i + 1 : j]
+                if ":" in expr or "!" in expr:  # format specs / conversions
+                    return None
+                if not expr.strip():
+                    return None
+                parts.append(("expr", expr.strip()))
+                i = j + 1
+                continue
+            buf += ch
+            i += 1
+        if buf:
+            parts.append(("text", buf))
+        return parts
+
+    def _fstring_word(self, raw: str) -> str | None:
+        """Emit an f-string as one double-quoted bash word with expansions."""
+        parts = self._fstring_parts(raw)
+        if parts is None:
+            return None
+        out = ""
+        for kind, val in parts:
+            if kind == "text":
+                if any(c in val for c in ('"', "$", "`", "\\")):
+                    return None  # would break the double-quoted word
+                out += val
+            else:
+                a = self._arith_of_text(val)
+                if a is None:
+                    return None
+                out += "${" + a + "}"
+        return '"' + out + '"'
+
+    def _arith_of_text(self, text: str) -> str | None:
+        """_arith over raw source text (used by f-string interpolations)."""
+        from .lexer import Lexer
+        from .parser import Parser
+
+        try:
+            sub = list(Parser(Lexer(text).tokenize()).parse())
+        except Exception:
+            return None
+        if len(sub) != 1:
+            return None
+        only = sub[0]
+        if only.type == "EXPRESSION":
+            only_val = self._strip_parens(str(only.value))
+            if only_val == str(only.value).strip():
+                return None
+            return self._arith_of_text(only_val)
+        return self._arith(only)
+
+    def _stringy(self, node: ASTNode | None) -> bool:
+        """True when the operand is string-typed (drives + as concat).
+
+        Propagates up '+' chains: a subtree containing a string literal
+        anywhere in a + chain is a concatenation ("Hello, " + name), while
+        a + b with no strings stays arithmetic (#25).
+        """
+        if node is None:
+            return False
+        if node.type == "STRING":
+            return True
+        if node.type == "BINOP":
+            opn = node.children[1] if len(node.children) > 1 else None
+            if opn is not None and str(opn.value) == "+":
+                return self._stringy(
+                    node.children[0] if node.children else None
+                ) or self._stringy(
+                    node.children[2] if len(node.children) > 2 else None
+                )
+        return False
+
+    def _ternary_word(self, node: ASTNode) -> str | None:
+        """Ternary as a single shell word: a if cond else b.
+
+        Emitted as a command substitution running an inline if — the only
+        way to get string branches into one word: "$( if (( c )); then
+        printf %s A; else printf %s B; fi )".
+        """
+        ch = node.children
+        if len(ch) < 4:
+            return None
+        # children: [true_expr, OP(if_else), cond, false_expr]
+        a = self._word(ch[0])
+        b = self._word(ch[3])
+        cond = self._arith(ch[2])
+        if a is None or b is None or cond is None:
+            return None
+        forbidden = ('"', "\\")
+        if any(c in a for c in forbidden) or any(c in b for c in forbidden):
+            return None
+        return f'"$( if (( {cond} )); then printf %s {a}; else printf %s {b}; fi )"'
+
+    def _bool_word(self, node: ASTNode) -> str | None:
+        """Comparison as a Python-style True/False word (#25)."""
+        a = self._arith(node)
+        if a is None:
+            return None
+        return f'"$( if (( {a} )); then printf True; else printf False; fi )"'
+
     def _word(self, node: ASTNode | None) -> str | None:
         """Render an expression as one shell word (quoted expansions included)."""
         if node is None:
@@ -402,20 +565,39 @@ class BashCodegen:
         if t == "NUMBER":
             return str(node.value) if isinstance(node.value, int) else None
         if t == "STRING":
+            raw = str(node.value)
+            if raw[:1] in ("f", "F") and len(raw) >= 2 and raw[1] in ('"', "'"):
+                # f-string literal: interpolate via expansions (#25/#24-parity)
+                return self._fstring_word(raw)
             inner = self._string_value(node)
             return self._shq(inner) if inner is not None else None
         if t == "IDENTIFIER":
-            if node.value in ("True", "False", "None"):
+            if node.value == "True":
+                return '"True"'
+            if node.value == "False":
+                return '"False"'
+            if node.value == "None":
                 return None
             return '"${' + node.value + '}"' if _IDENT_RE.fullmatch(node.value) else None
         if t == "CALL":
             sub = self._call_expr(node, value_ctx=True)
             return f'"{sub}"' if sub is not None else None
+        if t == "STRING":
+            raw = str(node.value)
+            if raw[:1] in ("f", "F") and len(raw) >= 2 and raw[1] in ('"', "'"):
+                return self._fstring_word(raw)
         if t == "BINOP":
             opn = node.children[1] if len(node.children) > 1 else None
             op = str(opn.value) if opn is not None else ""
-            if op == "+":
-                # string concatenation: s + "!" → "${s}!"
+            if op == "if_else":
+                return self._ternary_word(node)
+            if op == "+" and (
+                self._stringy(node.children[0] if node.children else None)
+                or self._stringy(node.children[2] if len(node.children) > 2 else None)
+            ):
+                # string concatenation: s + "!" → "${s}!" — only when a string
+                # operand makes concat the intended semantics (#25): a + b on
+                # identifiers must stay arithmetic, not "${a}${b}"
                 parts = []
                 for ch in (node.children[0], node.children[2]):
                     piece = self._concat_piece(ch)
@@ -424,6 +606,9 @@ class BashCodegen:
                     parts.append(piece)
                 if len(parts) == 2:
                     return '"' + "".join(parts) + '"'
+            if op in _CMP_OPS:
+                # comparisons render Python-style True/False (#25)
+                return self._bool_word(node)
             a = self._arith(node)
             return f'"$(( {a} ))"' if a is not None else None
         if t == "UNARYOP":
@@ -527,7 +712,11 @@ class BashCodegen:
         if t in ("BINARY_NUMBER", "HEX_NUMBER", "OCTAL_NUMBER"):
             return str(int(node.value))
         if t == "IDENTIFIER":
-            if node.value in ("True", "False", "None"):
+            if node.value == "True":
+                return "1"
+            if node.value == "False":
+                return "0"
+            if node.value == "None":
                 return None
             return node.value if _IDENT_RE.fullmatch(node.value) else None
         if t == "CALL":
@@ -577,7 +766,12 @@ class BashCodegen:
             if len(sub) != 1:
                 return None
             only = sub[0]
-            if only.type == "EXPRESSION" and str(only.value).strip() == text:
-                return None  # parser made no progress — give up, avoid recursion
+            if only.type == "EXPRESSION":
+                # parser wrapped it again — strip ONE outer paren pair and
+                # re-translate the inner text (#25: "(2 + 3)" must not give up)
+                stripped = self._strip_parens(text)
+                if stripped == text:
+                    return None  # no progress — give up, avoid recursion
+                return self._arith_of_text(stripped)
             return self._arith(only)
         return None

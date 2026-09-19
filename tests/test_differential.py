@@ -113,6 +113,14 @@ CONSENSUS_CASES = [
     ("modulo", "print(17 % 5)", "2"),
     # promoted from KNOWN_DRIFT after fixing #23 (untyped mut now binds)
     ("untyped-mut", "mut total = 0\nmut i = 0\nwhile i < 5:\n    total += i\n    i += 1\nprint(total)", "10"),
+    # promoted from KNOWN_DRIFT after fixing #25 (bash emit-path rewritten:
+    # arithmetic vs concat, parens, ternary, f-strings, bool words)
+    ("paren-print", "print((2 + 3) * 4)", "20"),
+    ("ternary-print", 'print("yes" if True else "no")', "yes"),
+    ("call-concat", "def add(a, b):\n    return a + b\nprint(add(2, 3))", "5"),
+    ("paren-rhs-assign", "x = (7 + 8)\nprint(x)", "15"),
+    ("function-assign", "def add(a, b):\n    return a + b\nc = add(2, 3)\nprint(c)", "5"),
+    ("bool-verbose", "print(3 < 5)", "True"),
 ]
 
 
@@ -157,20 +165,12 @@ class TestConsensus(unittest.TestCase):
 # ─── Tier 2: known drift — tracked in issues, must shrink over time ────────
 KNOWN_DRIFT = [
     # (name, code, expected, issue, backends-that-currently-diverge)
-    # NOTE: untyped-mut (#23) lived here until the parser fix — it is now in
-    # CONSENSUS_CASES above. Drift list keeps shrinking.
-    ("vm-fstring", 'x = 42\nprint(f"x={x}")', "x=42", 24, ("vm", "bash")),
-    ("paren-print", "print((2 + 3) * 4)", "20", 25, ("bash",)),
-    ("ternary-print", 'print("yes" if True else "no")', "yes", 25, ("bash",)),
-    # f-string print: bash silently drops the arg (#25) AND the VM prints the
-    # literal template (#24) — when either issue closes, re-triage this case.
-    ("fstring-print", 'x = 42\nprint(f"x={x}")', "x=42", 25, ("vm", "bash")),
-    ("call-concat", "def add(a, b):\n    return a + b\nprint(add(2, 3))", "5", 25, ("bash",)),
-    ("paren-rhs-assign", "x = (7 + 8)\nprint(x)", "15", 25, ("bash",)),
-    # same root cause: + on identifiers emits concat ("${a}${b}"), so the
-    # return value is "23" and assignment+print propagates it
-    ("function-assign", "def add(a, b):\n    return a + b\nc = add(2, 3)\nprint(c)", "5", 25, ("bash",)),
-    ("bool-verbose", "print(3 < 5)", "True", 25, ("bash",)),
+    # NOTE: #23 (untyped mut) and six #25 cases lived here until their fixes —
+    # all promoted to CONSENSUS_CASES above. Drift list keeps shrinking.
+    ("vm-fstring", 'x = 42\nprint(f"x={x}")', "x=42", 24, ("vm",)),
+    # f-string print: the bash half of this drift is fixed (#25); only the VM
+    # literal-template bug (#24) remains. Promote when #24 closes.
+    ("fstring-print", 'x = 42\nprint(f"x={x}")', "x=42", 24, ("vm",)),
 ]
 
 
