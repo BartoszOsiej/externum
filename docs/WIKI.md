@@ -183,7 +183,7 @@ source (.ext) → Lexer → tokens → Parser → AST → Compiler → python/ba
 
 ## Tests
 
-`python3 -m unittest discover -s tests` — **192 tests** covering lexer,
+`python3 -m unittest discover -s tests` — **366 tests** covering lexer,
 parser, compiler and runtime (classes, exceptions, imports, lambdas,
 comprehensions, generators, stdlib, REPL), plus the suites:
 `tests/test_drm.py` (license keys, watermark, tamper-detection,

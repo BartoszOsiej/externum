@@ -223,6 +223,40 @@ class TestMoreFeatures(unittest.TestCase):
         # no argv passed: argv is [<externum>]
         self.assertIn("<externum>", out)
 
+    # ---- regression: Compiler.compile() must return a dict for single targets
+    # (bug: --target bash crashed with "list indices must be integers")
+
+    def _compile(self, source: str, target: str):
+        from externum.compiler import Compiler
+        from externum.lexer import Lexer
+        from externum.parser import Parser
+
+        ast = list(Parser(Lexer(source).tokenize()).parse())
+        return Compiler(ast).compile(target)
+
+    def test_compile_single_targets_return_dict(self):
+        src = 'x: Int = 1\nprint("hi")\n`echo inline`\n'
+        for target in ("python", "bash", "binary"):
+            result = self._compile(src, target)
+            self.assertIsInstance(result, dict, f"target {target!r} must return dict")
+            self.assertIn(target, result)
+            self.assertIsInstance(result[target], str)
+
+    def test_compile_all_returns_all_targets(self):
+        src = 'x: Int = 1\nprint("hi")\n`echo inline`\n'
+        result = self._compile(src, "all")
+        self.assertEqual(set(result.keys()), {"python", "bash", "binary"})
+        self.assertIn("import subprocess", result["python"])
+
+    def test_compile_unknown_target_raises(self):
+        with self.assertRaises(ValueError):
+            self._compile('x: Int = 1\n', "wasm")
+
+    def test_compile_bash_target_runs(self):
+        # end-to-end: emitted bash for a bash-only program must be non-empty
+        result = self._compile('`echo hello-from-bash`\n', "bash")
+        self.assertIn("echo hello-from-bash", result["bash"])
+
 
 if __name__ == "__main__":
     unittest.main()

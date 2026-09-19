@@ -19,13 +19,18 @@ class Compiler:
         if self._has_bash():
             self.output["python"].insert(0, "import subprocess")
 
+        parts = {
+            "python": "\n".join(self.output["python"]),
+            "bash": "\n".join(self.output["bash"]),
+            "binary": "\n".join(self.output["binary"]),
+        }
         if target == "all":
-            return {
-                "python": "\n".join(self.output["python"]),
-                "bash": "\n".join(self.output["bash"]),
-                "binary": "\n".join(self.output["binary"]),
-            }
-        return self.output.get(target, "")
+            return parts
+        if target not in parts:
+            raise ValueError(f"unknown target: {target!r} (expected python|bash|binary|all)")
+        # Single targets keep the dict shape so callers can index result[target]
+        # uniformly (regression: --target bash crashed on list indexing).
+        return {target: parts[target]}
 
     def _has_bash(self) -> bool:
         return self._has_bash_in(self.ast)

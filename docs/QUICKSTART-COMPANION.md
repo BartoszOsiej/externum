@@ -1,6 +1,6 @@
 ## Architecture
 
-externum is a **triple-target programming language** — same source compiles to Python, Bash, or a native binary. 192 tests, all three targets.
+externum is a **triple-target programming language** — same source compiles to Python, Bash, or a native binary. 366 tests, all three targets.
 
 ### Compiler Pipeline
 

@@ -2,14 +2,14 @@
 
 <div align="center">
 
-[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=Programming%20language%20%E2%80%94%20compiles%20to%20Python%2C%20Bash%2C%20binary.%20192%20tests%2C%20browser%20REPL%2C%20DRM%2C%20ownership%2Btraits%20)](https://github.com/BartoszOsiej/externum)
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=Programming%20language%20%E2%80%94%20compiles%20to%20Python%2C%20Bash%2C%20binary.%20366%20tests%2C%20browser%20REPL%2C%20DRM%2C%20ownership%2Btraits%20)](https://github.com/BartoszOsiej/externum)
 
 </div># ⚡ Externum
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
 ![PyPI](https://img.shields.io/badge/PyPI-externum%402.0.0-3776AB?style=flat-square&logo=pypi)
-![Tests](https://img.shields.io/badge/Tests-307%20✓-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-366%20✓-brightgreen?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](https://github.com/BartoszOsiej/externum/blob/main/LICENSE)
 
@@ -34,6 +34,30 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 
 ---
 
+## Why?
+
+Most languages force you to choose: **readable or fast, scripting or systems**.
+Externum is one language for all three targets — write readable Python-style
+code, keep inline Bash for system control, and compile to a standalone artifact
+when you need to ship. Self-hosted: the compiler is written in Externum itself.
+
+```text
+$ externum run demo.ext
+hello world from Externum
+Linux 7.2.4-arch1-2
+
+$ externum demo.ext --target python -o demo.py
+Output written to demo.py
+
+$ python3 demo.py        # pure Python — runs without Externum
+hello world from Externum
+Linux 7.2.4-arch1-2
+```
+
+*(source: `demo.ext` — typed variable, `$"…"` interpolation, inline `` `uname -sr` ``)*
+
+---
+
 ## Table of Contents
 
 - [What it can do](#what-it-can-do)
@@ -43,10 +67,10 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 - [Browser Playground & Bot](#browser-playground--bot)
 - [Standard Library](#standard-library)
 - [DRM System](#drm-system)
-- [Verify](#verify)
 - [Project Structure](#project-structure)
 - [Tests](#tests)
 - [Docker](#docker)
+- [Benchmarks](#benchmarks)
 - [License](#license)
 
 ---
@@ -70,7 +94,7 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 
 ```bash
 pip install externum        # PyPI
-externum --version          # Externum 3.0.0
+externum --version          # Externum 4.0.0
 
 # From source
 git clone https://github.com/BartoszOsiej/externum.git
@@ -229,7 +253,7 @@ externum/
 lib/                  # Standard library (.ext)
 tools/                # Tooling in Externum
 examples/             # hello, calc, pokedex, hardcore.ext
-tests/                # 307 unit tests
+tests/                # 366 unit tests
 docs/WIKI.md          # Language specification
 ```
 
@@ -238,7 +262,7 @@ docs/WIKI.md          # Language specification
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 307 tests
+python3 -m unittest discover -s tests -v   # 366 tests
 ```
 
 ---
@@ -258,12 +282,6 @@ docker run -it externum repl
 
 ---
 
-
-## Why?
-
-Because most languages force you to choose: readable or fast, scripting or systems, batteries or minimal. Externum lets you write once and deploy everywhere — from a Python notebook to a Bash script to a compiled binary. The browser playground means anyone can try it in 5 seconds. The issue-command bot means the community shapes the language.
-
----
 
 ## Benchmarks
 
