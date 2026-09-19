@@ -41,7 +41,7 @@ Compile-only cost (`externum compile hello.ext`): **78 ms**.
 
 ## Known VM limitations (why the loop benchmarks use the Python-backend path)
 
-The EXBC VM currently mis-executes this exact program — tracked honestly, not hidden:
+The EXBC VM currently executes this exact program incorrectly — tracked honestly, not hidden:
 
 - [#21 — augmented assignment (`+=`) never stores the value → silent infinite loop](https://github.com/BartoszOsiej/externum/issues/21)
 - [#22 — parenthesized RHS in an assignment treated as a variable name](https://github.com/BartoszOsiej/externum/issues/22)
