@@ -173,7 +173,7 @@ jobs:
           python-version: "3.12"
       - run: pip install bandit safety
       - name: Bandit security scan
-        run: bandit -r externum/ -ll --skip B101,B102,B311
+        run: bandit -r externum/ -ll --skip B101,B102,B301,B311,B403
       - name: Safety dependency check
         run: safety check --full-report || true
 

@@ -68,3 +68,6 @@ ignore = [
 "externum/runtime/*" = ["S102", "BLE001"]
 # CLI boundary
 "externum/__main__.py" = ["BLE001"]
+# EXBC artifact I/O uses pickle by design (trusted, self-produced files —
+# same trust model as CPython's .pyc cache)
+"externum/bytecode.py" = ["S301", "S403"]
