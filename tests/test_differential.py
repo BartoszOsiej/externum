@@ -111,6 +111,8 @@ CONSENSUS_CASES = [
     ("while-loop", "i = 0\nwhile i < 5:\n    i = i + 1\nprint(i)", "5"),
     ("recursion", "def fact(n):\n    if n <= 1:\n        return 1\n    return n * fact(n - 1)\nprint(fact(6))", "720"),
     ("modulo", "print(17 % 5)", "2"),
+    # promoted from KNOWN_DRIFT after fixing #23 (untyped mut now binds)
+    ("untyped-mut", "mut total = 0\nmut i = 0\nwhile i < 5:\n    total += i\n    i += 1\nprint(total)", "10"),
 ]
 
 
@@ -155,13 +157,8 @@ class TestConsensus(unittest.TestCase):
 # ─── Tier 2: known drift — tracked in issues, must shrink over time ────────
 KNOWN_DRIFT = [
     # (name, code, expected, issue, backends-that-currently-diverge)
-    (
-        "untyped-mut",
-        "mut total = 0\nmut i = 0\nwhile i < 5:\n    total += i\n    i += 1\nprint(total)",
-        "10",
-        23,
-        ("python", "vm", "bash"),
-    ),
+    # NOTE: untyped-mut (#23) lived here until the parser fix — it is now in
+    # CONSENSUS_CASES above. Drift list keeps shrinking.
     ("vm-fstring", 'x = 42\nprint(f"x={x}")', "x=42", 24, ("vm", "bash")),
     ("paren-print", "print((2 + 3) * 4)", "20", 25, ("bash",)),
     ("ternary-print", 'print("yes" if True else "no")', "yes", 25, ("bash",)),

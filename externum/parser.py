@@ -243,6 +243,19 @@ class Parser:
                     val = self._parse_expression()
                     return ASTNode("ASSIGN", children=[ASTNode("IDENTIFIER", value=name), val])
                 return ASTNode("DECLARE", value=name, children=[ASTNode("TYPE", value=ann or "Any")])
+            elif self.pos < len(self.tokens) and self.tokens[self.pos].type == "ASSIGN":
+                # untyped declaration with initializer:  mut x = <expr>
+                # (issue #23: this branch was missing, so the name was never
+                # bound and every backend failed with an undefined-variable
+                # error on first use)
+                self.pos += 1
+                val = self._parse_expression()
+                self.mutable.add(name)
+                return ASTNode("ASSIGN", children=[ASTNode("IDENTIFIER", value=name), val])
+            else:
+                # bare untyped declaration:  mut x
+                self.mutable.add(name)
+                return ASTNode("DECLARE", value=name, children=[ASTNode("TYPE", value="Any")])
         expr = self._parse_expression()
         if self.pos < len(self.tokens):
             if expr.type == "IDENTIFIER" and self.tokens[self.pos].type == "COLON":
