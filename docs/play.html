@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Externum — Live Playground · a language you can extend from the browser</title>
+<meta name="description" content="Run and EXTEND the Externum programming language 100% in your browser. Write modules, hot-patch the stdlib, compile to Python and Bash — no server, no install.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬢</text></svg>">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://bartoszosiej.github.io/css/aegis.css">
+<link rel="canonical" href="https://bartoszosiej.github.io/externum/">
+<link rel="author" href="https://bartoszosiej.github.io/#person">
+<link rel="me" href="https://t.me/hartwell_info">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bartosz Osiej">
+<meta property="og:title" content="Externum — Live Playground · a language you can extend from the browser">
+<meta property="og:description" content="Run and EXTEND the Externum programming language 100% in your browser. Write modules, hot-patch the stdlib, compile to Python and Bash — no server, no install.">
+<meta property="og:url" content="https://bartoszosiej.github.io/externum/">
+<meta property="og:image" content="https://bartoszosiej.github.io/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "@id": "https://bartoszosiej.github.io/externum/#software",
+  "name": "Externum",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Programming language / compiler",
+  "operatingSystem": "Cross-platform",
+  "programmingLanguage": ["Python"],
+  "softwareVersion": "4.0",
+  "license": "https://opensource.org/licenses/MIT",
+  "codeRepository": "https://github.com/BartoszOsiej/externum",
+  "author": { "@id": "https://bartoszosiej.github.io/#person" },
+  "creator": { "@id": "https://bartoszosiej.github.io/#person" },
+  "description": "A programming language with three compilation targets: Python, Bash and bytecode. ~380 automated tests, differential backend harness in CI.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+</head>
+<body data-page="externum">
+
+<header>
+  <div class="brand">
+    <span class="logo">⬢</span>
+    <div>
+      <h1>Externum <em>Live Playground</em></h1>
+      <p>Run it. <b>Extend it.</b> Compile it — 100% in your browser, zero server.</p>
+    </div>
+  </div>
+  <nav>
+    <a href="./">← Home</a>
+    <a href="https://github.com/BartoszOsiej/externum" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://pypi.org/project/externum/" target="_blank" rel="noopener">PyPI</a>
+    <a href="https://bartoszosiej.github.io/Docs/docs/externum" target="_blank" rel="noopener">Docs</a>
+    <a href="https://t.me/hartwell_info" target="_blank" rel="noopener">Telegram</a>
+  </nav>
+</header>
+
+<main>
+  <section class="tabs" role="tablist">
+    <button class="tab active" data-tab="run" role="tab">[01]_RUN</button>
+    <button class="tab" data-tab="extend" role="tab">[02]_EXTEND_LANGUAGE</button>
+    <button class="tab" data-tab="compile" role="tab">[03]_COMPILED_TARGETS</button>
+  </section>
+
+  <!-- ============ RUN TAB ============ -->
+  <section id="panel-run" class="panel active">
+    <div class="toolbar">
+      <select id="example" aria-label="Load example">
+        <option value="hello">👋 Hello Externum</option>
+        <option value="oop">🏛️ OOP &amp; inheritance</option>
+        <option value="comprehensions">🧩 Comprehensions, lambdas, generators</option>
+        <option value="fstrings">🔤 F-strings &amp; dicts</option>
+        <option value="modules">📦 Stdlib imports</option>
+        <option value="shell">🐚 Inline Bash</option>
+        <option value="usemod">🧬 Use YOUR module</option>
+        <option value="pokedex">🐉 Pokédex demo</option>
+      </select>
+      <span class="spacer"></span>
+      <button id="share" class="ghost" title="Copy a link that restores this exact session">🔗 Share session</button>
+      <button id="run" class="primary">▶ Run <kbd>Ctrl+↵</kbd></button>
+    </div>
+    <div class="split">
+      <div class="col">
+        <div class="label">program.ext</div>
+        <textarea id="code" spellcheck="false" aria-label="Externum source"></textarea>
+      </div>
+      <div class="col">
+        <div class="label">output</div>
+        <pre id="output" class="console">— output appears here —</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EXTEND TAB ============ -->
+  <section id="panel-extend" class="panel">
+    <div class="extend-intro">
+      <h2>HOT-PATCH THE LANGUAGE</h2>
+      <p>
+        Write an Externum module (or just <i>describe</i> one) and load it into the runtime
+        <b>while it is running</b>. Your module becomes importable instantly:
+        <code>import mymodule</code>. Modules persist in your browser and are embedded in
+        shared links. Want it in the official stdlib for <i>everyone</i>? Hit
+        <b>Propose to stdlib</b> — a GitHub Action validates it against the test suite and
+        opens a pull request into <code>lib/</code>.
+      </p>
+    </div>
+    <div class="split">
+      <div class="col">
+        <div class="label">module name</div>
+        <input id="modname" type="text" placeholder="mymodule" spellcheck="false" autocomplete="off">
+        <div class="label" style="margin-top:14px">mode</div>
+        <div class="seg">
+          <button class="segbtn active" data-mode="write">✍️ Write code</button>
+          <button class="segbtn" data-mode="describe">🗣️ Describe it</button>
+        </div>
+        <div class="label" id="descwrap" style="display:none;margin-top:14px">describe in plain words</div>
+        <textarea id="describe" style="display:none" spellcheck="false"
+          placeholder="e.g. a function cbrt(x) returning the cube root, and clamp(v, lo, hi) limiting v into range"></textarea>
+      </div>
+      <div class="col">
+        <div class="label">module source — <span id="modfile">mymodule.ext</span></div>
+        <textarea id="modcode" spellcheck="false" aria-label="Module source"></textarea>
+        <div class="modactions">
+          <button id="loadmod" class="primary">⚡ Load into runtime</button>
+          <button id="propose" class="ghost">⭐ Propose to stdlib (GitHub)</button>
+          <button id="genfromdesc" class="ghost" style="display:none">🪄 Generate skeleton</button>
+        </div>
+      </div>
+    </div>
+    <div class="modules-bar">
+      <span class="label">your modules:</span>
+      <div id="modlist" class="chips"><span class="chip empty">none yet — load one above</span></div>
+      <button id="clearmods" class="danger ghost">🗑 Remove all</button>
+    </div>
+  </section>
+
+  <!-- ============ COMPILE TAB ============ -->
+  <section id="panel-compile" class="panel">
+    <div class="toolbar">
+      <span class="hint-inline">The same source, compiled by the real Externum compiler — live.</span>
+      <span class="spacer"></span>
+      <button id="compile" class="primary">⚙ Compile all targets</button>
+    </div>
+    <div class="triple">
+      <div class="col">
+        <div class="label">→ python</div>
+        <pre id="out-python" class="console small">// press Compile</pre>
+      </div>
+      <div class="col">
+        <div class="label">→ bash</div>
+        <pre id="out-bash" class="console small">// press Compile</pre>
+      </div>
+      <div class="col">
+        <div class="label">→ binary (IR)</div>
+        <pre id="out-binary" class="console small">// press Compile</pre>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span id="status" class="status idle">Runtime not loaded yet — press Run or Compile.</span>
+  <span class="right">Externum 4.0 · Pyodide (WASM CPython) · no telemetry, no server · <a href="https://t.me/hartwell_info" style="color:var(--acc1);text-decoration:none">t.me/hartwell_info</a></span>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="app.js"></script>
+<script defer src="https://bartoszosiej.github.io/js/aegis-chrome.js"></script>
+</body>
+</html>

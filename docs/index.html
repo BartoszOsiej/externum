@@ -3,18 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Externum — Live Playground · a language you can extend from the browser</title>
-<meta name="description" content="Run and EXTEND the Externum programming language 100% in your browser. Write modules, hot-patch the stdlib, compile to Python and Bash — no server, no install.">
+<title>Externum — one typed source, three backends that already exist</title>
+<meta name="description" content="Externum is a MIT-licensed, statically typed language that compiles to plain readable Python, standalone Bash, and a bytecode VM. ~380 tests, differential backend harness in CI, browser playground.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬢</text></svg>">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://bartoszosiej.github.io/css/aegis.css">
 <link rel="canonical" href="https://bartoszosiej.github.io/externum/">
 <link rel="author" href="https://bartoszosiej.github.io/#person">
 <link rel="me" href="https://t.me/hartwell_info">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Bartosz Osiej">
-<meta property="og:title" content="Externum — Live Playground · a language you can extend from the browser">
-<meta property="og:description" content="Run and EXTEND the Externum programming language 100% in your browser. Write modules, hot-patch the stdlib, compile to Python and Bash — no server, no install.">
+<meta property="og:title" content="Externum — one typed source, three backends that already exist">
+<meta property="og:description" content="Statically typed language compiling to Python, standalone Bash and a bytecode VM. Honest benchmark, differential harness, browser playground.">
 <meta property="og:url" content="https://bartoszosiej.github.io/externum/">
 <meta property="og:image" content="https://bartoszosiej.github.io/img/og.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -33,139 +31,189 @@
   "codeRepository": "https://github.com/BartoszOsiej/externum",
   "author": { "@id": "https://bartoszosiej.github.io/#person" },
   "creator": { "@id": "https://bartoszosiej.github.io/#person" },
-  "description": "A programming language with three compilation targets: Python, Bash and bytecode. ~380 automated tests, differential backend harness in CI.",
+  "description": "A statically typed language with three compilation targets: Python, Bash and bytecode. ~380 automated tests, differential backend harness in CI.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
 </script>
+<style>
+:root {
+  --bg: #050505; --panel: #0a0a0d; --panel2: #101014; --line: #22222a;
+  --fg: #d6d6d6; --sub: #8b95a8; --slate: #4A5262;
+  --rust: #F15A24; --blood: #DA2C38; --ok: #22c55e;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: "JetBrains Mono", "Space Mono", ui-monospace, monospace;
+  line-height: 1.6; overflow-x: hidden;
+}
+a { color: inherit; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+
+header { border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(5,5,5,.92); backdrop-filter: blur(6px); z-index: 10; }
+.nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; }
+.nav .logo { color: var(--rust); font-weight: 700; font-size: 17px; letter-spacing: 1px; text-decoration: none; }
+.nav .links { display: flex; gap: 18px; flex-wrap: wrap; }
+.nav .links a { color: var(--sub); text-decoration: none; font-size: 11px; letter-spacing: 1.5px; }
+.nav .links a:hover { color: var(--rust); }
+
+.hero { padding: clamp(60px, 12vw, 120px) 0 clamp(40px, 8vw, 80px); border-bottom: 1px solid var(--line); }
+.eyebrow { color: var(--sub); font-size: 12px; letter-spacing: 2px; }
+.eyebrow b { color: var(--ok); font-weight: 400; }
+h1 { font-size: clamp(38px, 9vw, 88px); line-height: .95; letter-spacing: -1px; font-weight: 700; margin: 18px 0 20px; }
+h1 span { color: var(--rust); }
+.sub { max-width: 640px; color: var(--sub); font-size: 14px; }
+.sub b { color: var(--fg); font-weight: 400; }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 32px; }
+.btn {
+  display: inline-block; padding: 12px 22px; text-decoration: none;
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  border: 1px solid var(--line); color: var(--fg); background: var(--panel);
+  transition: all .15s;
+}
+.btn.primary { background: var(--rust); border-color: var(--rust); color: #050505; }
+.btn.primary:hover { filter: brightness(1.12); }
+.btn:hover { border-color: var(--rust); color: var(--rust); }
+.btn.primary:hover { color: #050505; }
+
+section { padding: clamp(40px, 7vw, 72px) 0; border-bottom: 1px solid var(--line); }
+h2 { font-size: clamp(20px, 4vw, 34px); letter-spacing: -0.5px; margin: 10px 0 24px; }
+h2 span { color: var(--rust); }
+.kicker { color: var(--sub); font-size: 11px; letter-spacing: 2px; }
+.kicker::before { content: "// "; color: var(--rust); }
+
+.codeblock {
+  background: var(--panel); border: 1px solid var(--line); padding: 20px;
+  font-size: 13px; line-height: 1.7; overflow-x: auto; white-space: pre;
+}
+.codeblock .c { color: var(--slate); }
+.codeblock .k { color: var(--rust); }
+.codeblock .s { color: var(--ok); }
+.codecap { color: var(--slate); font-size: 11px; letter-spacing: 1px; margin-top: 10px; }
+
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 28px; }
+.card { background: var(--panel); border: 1px solid var(--line); padding: 22px; transition: border-color .15s; }
+.card:hover { border-color: var(--rust); }
+.card h3 { font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px; }
+.card h3::before { content: "▸ "; color: var(--rust); }
+.card p { color: var(--sub); font-size: 12.5px; }
+.card .tagline { margin-top: 14px; font-size: 11px; color: var(--slate); letter-spacing: 1px; }
+.card .tagline b { color: var(--rust); font-weight: 400; }
+
+.bench { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 28px; }
+.stat { border: 1px solid var(--line); background: var(--panel); padding: 22px; }
+.stat .n { font-size: clamp(28px, 5vw, 44px); font-weight: 700; color: var(--rust); }
+.stat .l { color: var(--sub); font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; margin-top: 6px; }
+
+.story { border-left: 2px solid var(--rust); padding-left: 20px; color: var(--sub); font-size: 13.5px; max-width: 760px; }
+.story b { color: var(--fg); font-weight: 400; }
+.story .m { color: var(--ok); }
+
+footer { padding: 28px 0; color: var(--slate); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+footer a { color: var(--sub); text-decoration: none; }
+footer a:hover { color: var(--rust); }
+</style>
 </head>
-<body data-page="externum">
+<body>
 
 <header>
-  <div class="brand">
-    <span class="logo">⬢</span>
-    <div>
-      <h1>Externum <em>Live Playground</em></h1>
-      <p>Run it. <b>Extend it.</b> Compile it — 100% in your browser, zero server.</p>
-    </div>
+  <div class="wrap nav">
+    <a class="logo" href="/">⬢ EXTERNUM</a>
+    <nav class="links">
+      <a href="#why">[01]_WHY</a>
+      <a href="#targets">[02]_TARGETS</a>
+      <a href="#bench">[03]_BENCH</a>
+      <a href="#story">[04]_STORY</a>
+      <a href="https://github.com/BartoszOsiej/externum" target="_blank" rel="noopener">GITHUB ↗</a>
+      <a href="https://t.me/hartwell_info" target="_blank" rel="noopener">TELEGRAM ↗</a>
+    </nav>
   </div>
-  <nav>
-    <a href="https://github.com/BartoszOsiej/externum" target="_blank" rel="noopener">GitHub</a>
-    <a href="https://pypi.org/project/externum/" target="_blank" rel="noopener">PyPI</a>
-    <a href="https://bartoszosiej.github.io/Docs/docs/externum" target="_blank" rel="noopener">Docs</a>
-    <a href="https://t.me/hartwell_info" target="_blank" rel="noopener">Telegram</a>
-  </nav>
 </header>
 
-<main>
-  <section class="tabs" role="tablist">
-    <button class="tab active" data-tab="run" role="tab">[01]_RUN</button>
-    <button class="tab" data-tab="extend" role="tab">[02]_EXTEND_LANGUAGE</button>
-    <button class="tab" data-tab="compile" role="tab">[03]_COMPILED_TARGETS</button>
-  </section>
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">+/ STATUS: <b>v4.0 STABLE</b> · MIT · ~380 TESTS · DIFFERENTIAL_HARNESS_IN_CI</p>
+    <h1>ONE TYPED SOURCE.<br><span>THREE BACKENDS</span><br>THAT ALREADY EXIST.</h1>
+    <p class="sub">Externum compiles to <b>plain readable Python</b>, <b>standalone Bash</b> (real functions, recursion, <b>set -euo pipefail</b>), or a <b>source-less bytecode artifact</b>. No runtime you have to ship — the backends are the runtimes your machine already has.</p>
+    <div class="cta">
+      <a class="btn primary" href="play.html">▶ OPEN PLAYGROUND</a>
+      <a class="btn" href="https://pypi.org/project/externum/" target="_blank" rel="noopener">pip install externum</a>
+      <a class="btn" href="https://github.com/BartoszOsiej/externum" target="_blank" rel="noopener">GITHUB ↗</a>
+    </div>
+  </div>
+</section>
 
-  <!-- ============ RUN TAB ============ -->
-  <section id="panel-run" class="panel active">
-    <div class="toolbar">
-      <select id="example" aria-label="Load example">
-        <option value="hello">👋 Hello Externum</option>
-        <option value="oop">🏛️ OOP &amp; inheritance</option>
-        <option value="comprehensions">🧩 Comprehensions, lambdas, generators</option>
-        <option value="fstrings">🔤 F-strings &amp; dicts</option>
-        <option value="modules">📦 Stdlib imports</option>
-        <option value="shell">🐚 Inline Bash</option>
-        <option value="usemod">🧬 Use YOUR module</option>
-        <option value="pokedex">🐉 Pokédex demo</option>
-      </select>
-      <span class="spacer"></span>
-      <button id="share" class="ghost" title="Copy a link that restores this exact session">🔗 Share session</button>
-      <button id="run" class="primary">▶ Run <kbd>Ctrl+↵</kbd></button>
-    </div>
-    <div class="split">
-      <div class="col">
-        <div class="label">program.ext</div>
-        <textarea id="code" spellcheck="false" aria-label="Externum source"></textarea>
-      </div>
-      <div class="col">
-        <div class="label">output</div>
-        <pre id="output" class="console">— output appears here —</pre>
-      </div>
-    </div>
-  </section>
+<section id="why">
+  <div class="wrap">
+    <p class="kicker">[01] WHY</p>
+    <h2>WRITE IT ONCE.<br><span>RUN IT EVERYWHERE</span> A SHELL LIVES.</h2>
+    <div class="codeblock"><span class="c"># hello.ext — the same file powers all three targets</span>
+<span class="k">def</span> greet(name: <span class="k">Str</span>) -> <span class="k">Str</span>:
+    <span class="k">return</span> <span class="s">"Hello, "</span> + name + <span class="s">"!"</span>
 
-  <!-- ============ EXTEND TAB ============ -->
-  <section id="panel-extend" class="panel">
-    <div class="extend-intro">
-      <h2>HOT-PATCH THE LANGUAGE</h2>
-      <p>
-        Write an Externum module (or just <i>describe</i> one) and load it into the runtime
-        <b>while it is running</b>. Your module becomes importable instantly:
-        <code>import mymodule</code>. Modules persist in your browser and are embedded in
-        shared links. Want it in the official stdlib for <i>everyone</i>? Hit
-        <b>Propose to stdlib</b> — a GitHub Action validates it against the test suite and
-        opens a pull request into <code>lib/</code>.
-      </p>
-    </div>
-    <div class="split">
-      <div class="col">
-        <div class="label">module name</div>
-        <input id="modname" type="text" placeholder="mymodule" spellcheck="false" autocomplete="off">
-        <div class="label" style="margin-top:14px">mode</div>
-        <div class="seg">
-          <button class="segbtn active" data-mode="write">✍️ Write code</button>
-          <button class="segbtn" data-mode="describe">🗣️ Describe it</button>
-        </div>
-        <div class="label" id="descwrap" style="display:none;margin-top:14px">describe in plain words</div>
-        <textarea id="describe" style="display:none" spellcheck="false"
-          placeholder="e.g. a function cbrt(x) returning the cube root, and clamp(v, lo, hi) limiting v into range"></textarea>
-      </div>
-      <div class="col">
-        <div class="label">module source — <span id="modfile">mymodule.ext</span></div>
-        <textarea id="modcode" spellcheck="false" aria-label="Module source"></textarea>
-        <div class="modactions">
-          <button id="loadmod" class="primary">⚡ Load into runtime</button>
-          <button id="propose" class="ghost">⭐ Propose to stdlib (GitHub)</button>
-          <button id="genfromdesc" class="ghost" style="display:none">🪄 Generate skeleton</button>
-        </div>
-      </div>
-    </div>
-    <div class="modules-bar">
-      <span class="label">your modules:</span>
-      <div id="modlist" class="chips"><span class="chip empty">none yet — load one above</span></div>
-      <button id="clearmods" class="danger ghost">🗑 Remove all</button>
-    </div>
-  </section>
+<span class="k">mut</span> names: <span class="k">[Str]</span> = [<span class="s">"world"</span>, <span class="s">"bash"</span>, <span class="s">"cpython"</span>]
+<span class="k">for</span> n <span class="k">in</span> names:
+    print(greet(n))</div>
+    <p class="codecap">$ externum run hello.ext · $ externum compile --target bash hello.ext · $ externum vm hello.ext</p>
+  </div>
+</section>
 
-  <!-- ============ COMPILE TAB ============ -->
-  <section id="panel-compile" class="panel">
-    <div class="toolbar">
-      <span class="hint-inline">The same source, compiled by the real Externum compiler — live.</span>
-      <span class="spacer"></span>
-      <button id="compile" class="primary">⚙ Compile all targets</button>
+<section id="targets">
+  <div class="wrap">
+    <p class="kicker">[02] TARGETS</p>
+    <h2>THREE BACKENDS.<br><span>ZERO</span> NEW RUNTIMES.</h2>
+    <div class="grid3">
+      <div class="card">
+        <h3>Python</h3>
+        <p>Readable, idiomatic CPython output — debug it with the normal tooling, ship it as source. ~1.6× slower than CPython on the honest bench.</p>
+        <div class="tagline">TARGET: <b>CPYTHON</b> · DEBUGGABLE</div>
+      </div>
+      <div class="card">
+        <h3>Bash</h3>
+        <p>Standalone strict-mode scripts: real functions, recursion, arithmetic that respects types. The compiler warns instead of silently emitting footguns.</p>
+        <div class="tagline">TARGET: <b>/BIN/BASH</b> · ZERO_DEPS</div>
+      </div>
+      <div class="card">
+        <h3>Bytecode</h3>
+        <p>A source-less artifact for the bundled VM — your logic ships without shipping the source. Same frontend, same semantics, own stack machine.</p>
+        <div class="tagline">TARGET: <b>EXTERNUM_VM</b> · SOURCE-LESS</div>
+      </div>
     </div>
-    <div class="triple">
-      <div class="col">
-        <div class="label">→ python</div>
-        <pre id="out-python" class="console small">// press Compile</pre>
-      </div>
-      <div class="col">
-        <div class="label">→ bash</div>
-        <pre id="out-bash" class="console small">// press Compile</pre>
-      </div>
-      <div class="col">
-        <div class="label">→ binary (IR)</div>
-        <pre id="out-binary" class="console small">// press Compile</pre>
-      </div>
+  </div>
+</section>
+
+<section id="bench">
+  <div class="wrap">
+    <p class="kicker">[03] BENCH — PUBLIC METHODOLOGY</p>
+    <h2>HONEST NUMBERS.<br><span>MEASURED</span>, NOT MARKETED.</h2>
+    <div class="bench">
+      <div class="stat"><div class="n">~1.6×</div><div class="l">slower than CPython (python target)</div></div>
+      <div class="stat"><div class="n">~11×</div><div class="l">faster than the bash target, same loop</div></div>
+      <div class="stat"><div class="n">499500</div><div class="l">identical result on all three backends</div></div>
     </div>
-  </section>
-</main>
+  </div>
+</section>
+
+<section id="story">
+  <div class="wrap">
+    <p class="kicker">[04] STORY</p>
+    <h2>THE BENCHMARK THAT<br><span>CAUGHT ITS OWN BUGS.</span></h2>
+    <p class="story">The honest benchmark found <b>two silent VM bugs</b> — then we shipped a differential harness that runs every program through all three backends. Its first morning on duty it caught <b>three more</b>, including the bash backend compiling <b>add(2, 3)</b> into <span class="m">"23"</span> because "+" always meant concatenation. Our benchmark returned <b>0 instead of 499500</b>. Silently. rc=0.<br><br>All five: root-caused, fixed same day, promoted to tier-1 consensus tests. <b>Backend drift is now CI-enforced at zero.</b></p>
+    <div class="cta">
+      <a class="btn primary" href="play.html">▶ TRY IT IN THE BROWSER</a>
+      <a class="btn" href="https://github.com/BartoszOsiej/externum" target="_blank" rel="noopener">READ THE HARNESS ↗</a>
+    </div>
+  </div>
+</section>
 
 <footer>
-  <span id="status" class="status idle">Runtime not loaded yet — press Run or Compile.</span>
-  <span class="right">Externum 4.0 · Pyodide (WASM CPython) · no telemetry, no server · <a href="https://t.me/hartwell_info" style="color:var(--acc1);text-decoration:none">t.me/hartwell_info</a></span>
+  <div class="wrap">
+    <span>⬢ EXTERNUM · MIT · PART OF <a href="/">BARTOSZOSIEJ.GITHUB.IO</a></span>
+    <span><a href="https://github.com/BartoszOsiej/externum">GITHUB</a> · <a href="https://pypi.org/project/externum/">PYPI</a> · <a href="play.html">PLAYGROUND</a> · <a href="https://t.me/hartwell_info">T.ME/HARTWELL_INFO</a></span>
+  </div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
-<script src="app.js"></script>
-<script defer src="https://bartoszosiej.github.io/js/aegis-chrome.js"></script>
 </body>
 </html>
