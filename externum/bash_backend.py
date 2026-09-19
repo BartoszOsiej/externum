@@ -522,9 +522,7 @@ class BashCodegen:
         if node.type == "BINOP":
             opn = node.children[1] if len(node.children) > 1 else None
             if opn is not None and str(opn.value) == "+":
-                return self._stringy(
-                    node.children[0] if node.children else None
-                ) or self._stringy(
+                return self._stringy(node.children[0] if node.children else None) or self._stringy(
                     node.children[2] if len(node.children) > 2 else None
                 )
         return False
