@@ -121,6 +121,9 @@ CONSENSUS_CASES = [
     ("paren-rhs-assign", "x = (7 + 8)\nprint(x)", "15"),
     ("function-assign", "def add(a, b):\n    return a + b\nc = add(2, 3)\nprint(c)", "5"),
     ("bool-verbose", "print(3 < 5)", "True"),
+    # promoted from KNOWN_DRIFT after fixing #24 (VM now interpolates
+    # f-strings via _emit_fstring_body instead of loading the raw literal)
+    ("fstring-interp", 'x = 42\nprint(f"x={x}")', "x=42"),
 ]
 
 
@@ -165,12 +168,9 @@ class TestConsensus(unittest.TestCase):
 # ─── Tier 2: known drift — tracked in issues, must shrink over time ────────
 KNOWN_DRIFT = [
     # (name, code, expected, issue, backends-that-currently-diverge)
-    # NOTE: #23 (untyped mut) and six #25 cases lived here until their fixes —
-    # all promoted to CONSENSUS_CASES above. Drift list keeps shrinking.
-    ("vm-fstring", 'x = 42\nprint(f"x={x}")', "x=42", 24, ("vm",)),
-    # f-string print: the bash half of this drift is fixed (#25); only the VM
-    # literal-template bug (#24) remains. Promote when #24 closes.
-    ("fstring-print", 'x = 42\nprint(f"x={x}")', "x=42", 24, ("vm",)),
+    # EMPTY as of the #23/#24/#25 fixes — all cases promoted to consensus.
+    # The grader below keeps this honest: any new backend divergence lands
+    # here with an issue, and can only ever be promoted, never ignored.
 ]
 
 

@@ -876,11 +876,70 @@ class BytecodeCompiler:
     def _expr_STRING(self, node: ASTNode):
         val = node.value
         if isinstance(val, str) and len(val) >= 2:
+            if val[0] in "fF" and len(val) >= 4 and val[1] == val[-1] and val[1] in ('"', "'") and val[2] != val[1]:
+                # f-string: emit real interpolation (#24). The Python target
+                # passes f-strings through raw to CPython; the VM must do
+                # the interpolation itself.
+                self._emit_fstring_body(val[2:-1])
+                return
             if val[0] in "fFrRbBuU" and val[1] in ('"', "'"):
                 val = val[1:]  # strip prefix
             if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
                 val = val[1:-1]
         self._emit(LOAD_CONST, self._add_const(val))
+
+    def _emit_fstring_body(self, body: str):
+        """Emit an f-string body ("x={x}") as str()-joined parts (#24).
+
+        Supports plain ``{expr}`` interpolation plus ``{{`` / ``}}``
+        escapes. Format specs (``{x:>5}``) and conversions (``{x!r}``)
+        are not supported on the VM backend — keep f-strings plain in
+        Externum source (the Python and bash targets handle them).
+        """
+        parts: list[tuple[bool, str]] = []  # (is_expr, text)
+        buf: list[str] = []
+        i = 0
+        while i < len(body):
+            c = body[i]
+            if c == "{":
+                if i + 1 < len(body) and body[i + 1] == "{":
+                    buf.append("{")
+                    i += 2
+                    continue
+                end = body.find("}", i + 1)
+                if end == -1:
+                    buf.append(c)
+                    i += 1
+                    continue
+                if buf:
+                    parts.append((False, "".join(buf)))
+                    buf = []
+                parts.append((True, body[i + 1 : end]))
+                i = end + 1
+            elif c == "}":
+                if i + 1 < len(body) and body[i + 1] == "}":
+                    buf.append("}")
+                    i += 2
+                    continue
+                buf.append(c)
+                i += 1
+            else:
+                buf.append(c)
+                i += 1
+        if buf:
+            parts.append((False, "".join(buf)))
+        if not parts:
+            self._emit(LOAD_CONST, self._add_const(""))
+            return
+        for i, (is_expr, text) in enumerate(parts):
+            if is_expr:
+                self._compile_simple_expr(text.strip())
+                self._emit2(INTRINSIC, 2, 1)  # str(x)
+            else:
+                self._emit(LOAD_CONST, self._add_const(text))
+            if i > 0:
+                # ADD pops (b, a) -> a + b: both operands are on the stack
+                self._emit(ADD)
 
     def _expr_INTERP(self, node: ASTNode):
         """$"text {expr} more" → parts joined with str() + ADD.
