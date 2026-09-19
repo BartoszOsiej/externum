@@ -58,6 +58,10 @@ Linux 7.2.4-arch1-2
 
 ---
 
+🌐 **[▶ Try Externum in your browser — no install](https://bartoszosiej.github.io/externum/)** · or `pip install externum`
+
+---
+
 ## Table of Contents
 
 - [What it can do](#what-it-can-do)
