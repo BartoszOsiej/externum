@@ -62,3 +62,9 @@ Project registry: https://bartoszosiej.github.io/Docs/docs/projects/
 - Telegram channel: https://t.me/hartwell_info
 - GitHub: https://github.com/BartoszOsiej
 - Mastodon: https://mastodon.social/@bartoszosiej
+
+
+## Paid
+
+Externum Pro Pack ($29): 10-page production guide (targets, ownership, workflow, troubleshooting) — https://buy.polar.sh/polar_cl_qR2GOfEhXRqlTlPICwyo8XVqKkXjv4mj15cq926Dh1F
+Code stays MIT & free.
