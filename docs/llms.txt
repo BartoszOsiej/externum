@@ -66,5 +66,5 @@ Project registry: https://bartoszosiej.github.io/Docs/docs/projects/
 
 ## Paid
 
-Externum Pro Pack ($29): 10-page production guide (targets, ownership, workflow, troubleshooting) — https://buy.polar.sh/polar_cl_qR2GOfEhXRqlTlPICwyo8XVqKkXjv4mj15cq926Dh1F
+Externum Pro Pack: launch week 22-29 Sep = $29 with code LAUNCHWEEK (normally $50). 10-page production guide (targets, ownership, workflow, troubleshooting) — https://buy.polar.sh/polar_cl_qR2GOfEhXRqlTlPICwyo8XVqKkXjv4mj15cq926Dh1F
 Code stays MIT & free.
