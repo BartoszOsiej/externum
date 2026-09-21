@@ -6,6 +6,8 @@
 
 </div># ⚡ Externum
 
+[![Launch week on DevHunt](https://img.shields.io/badge/DevHunt-Launch%20Week%2022%E2%80%9329%20Sep-8A2BE2)](https://devhunt.org/tool/externum)
+
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
 ![PyPI](https://img.shields.io/badge/PyPI-externum%402.0.0-3776AB?style=flat-square&logo=pypi)
