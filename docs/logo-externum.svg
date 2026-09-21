@@ -1,22 +1,69 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <title>Externum logo</title>
+  <title>Externum logo v3</title>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#020617"/>
-      <stop offset="1" stop-color="#1E1B4B"/>
+    <radialGradient id="bg" cx="0.5" cy="0.36" r="0.9">
+      <stop offset="0" stop-color="#241E52"/>
+      <stop offset="0.55" stop-color="#151238"/>
+      <stop offset="1" stop-color="#060514"/>
+    </radialGradient>
+    <linearGradient id="inb" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#94A3B8" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#F8FAFC"/>
     </linearGradient>
-    <linearGradient id="in" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#64748B"/>
-      <stop offset="1" stop-color="#E2E8F0"/>
+    <linearGradient id="py" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#0891B2"/>
     </linearGradient>
+    <linearGradient id="sh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FCD34D"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="bc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#C4B5FD"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#F8FAFC" stop-opacity="0.20"/>
+      <stop offset="0.5" stop-color="#F8FAFC" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#A5B4FC" stop-opacity="0.14"/>
+    </linearGradient>
+    <filter id="b1" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <filter id="b2" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
   </defs>
-  <rect x="16" y="16" width="224" height="224" rx="48" fill="url(#bg)"/>
+
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bg)"/>
+
+  <!-- ambient aurora behind prism -->
+  <ellipse cx="128" cy="128" rx="86" ry="60" fill="#4F46E5" opacity="0.16" filter="url(#b2)"/>
+  <ellipse cx="96" cy="96" rx="40" ry="30" fill="#22D3EE" opacity="0.10" filter="url(#b2)"/>
+
   <!-- input beam -->
-  <line x1="44" y1="128" x2="112" y2="128" stroke="url(#in)" stroke-width="9" stroke-linecap="round"/>
-  <!-- prism -->
-  <polygon points="128,84 168,172 88,172" fill="none" stroke="#E2E8F0" stroke-width="8" stroke-linejoin="round"/>
-  <!-- output beams: python / bash / bytecode -->
-  <line x1="142" y1="122" x2="214" y2="86"  stroke="#22D3EE" stroke-width="8" stroke-linecap="round"/>
-  <line x1="144" y1="132" x2="216" y2="132" stroke="#F59E0B" stroke-width="8" stroke-linecap="round"/>
-  <line x1="142" y1="142" x2="214" y2="178" stroke="#A78BFA" stroke-width="8" stroke-linecap="round"/>
+  <line x1="36" y1="120" x2="106" y2="120" stroke="url(#inb)" stroke-width="8" stroke-linecap="round" filter="url(#b1)" opacity="0.9"/>
+  <line x1="36" y1="120" x2="106" y2="120" stroke="url(#inb)" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- glass prism -->
+  <polygon points="128,66 174,158 82,158" fill="url(#glass)" stroke="#EEF2FF" stroke-opacity="0.75" stroke-width="4" stroke-linejoin="round"/>
+  <polygon points="128,66 174,158 82,158" fill="none" stroke="#FFFFFF" stroke-opacity="0.25" stroke-width="1.2" stroke-linejoin="round" transform="translate(-3,-3)"/>
+  <!-- specular highlight -->
+  <path d="M118 84 L138 84 L112 130 L102 130 Z" fill="#FFFFFF" opacity="0.16" filter="url(#b1)"/>
+
+  <!-- dispersion beams -->
+  <line x1="136" y1="112" x2="222" y2="72"  stroke="url(#py)" stroke-width="7" stroke-linecap="round" filter="url(#b1)" opacity="0.95"/>
+  <line x1="138" y1="122" x2="224" y2="122" stroke="url(#sh)" stroke-width="7" stroke-linecap="round" filter="url(#b1)" opacity="0.95"/>
+  <line x1="136" y1="132" x2="222" y2="172" stroke="url(#bc)" stroke-width="7" stroke-linecap="round" filter="url(#b1)" opacity="0.95"/>
+
+  <line x1="136" y1="112" x2="222" y2="72"  stroke="#A5F3FC" stroke-width="2.6" stroke-linecap="round"/>
+  <line x1="138" y1="122" x2="224" y2="122" stroke="#FDE68A" stroke-width="2.6" stroke-linecap="round"/>
+  <line x1="136" y1="132" x2="222" y2="172" stroke="#DDD6FE" stroke-width="2.6" stroke-linecap="round"/>
+
+  <!-- floor reflection -->
+  <g opacity="0.12" transform="translate(0,318) scale(1,-1)" filter="url(#b2)">
+    <line x1="136" y1="112" x2="222" y2="72" stroke="#22D3EE" stroke-width="6"/>
+    <line x1="138" y1="122" x2="224" y2="122" stroke="#F59E0B" stroke-width="6"/>
+    <line x1="136" y1="132" x2="222" y2="172" stroke="#A78BFA" stroke-width="6"/>
+  </g>
 </svg>
