@@ -342,6 +342,11 @@ bootstraps from a 6.4 KB Python stub; everything else is written in Externum.
 
 ---
 
+## Support the project
+
+- **[Externum Pro Pack — $29](https://buy.polar.sh/polar_cl_qR2GOfEhXRqlTlPICwyo8XVqKkXjv4mj15cq926Dh1F)**: a 10-page production guide — choosing between the three targets, the ownership model, the real-world workflow, troubleshooting. Code stays MIT and free; the pack is the curated path.
+- Questions about production use: mmc29213@gmail.com
+
 ## License
 
 MIT
