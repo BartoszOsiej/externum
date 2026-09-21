@@ -441,4 +441,8 @@ document.addEventListener('keydown', (e) => {
   if (!restored) $('code').value = EXAMPLES.hello;
   $('modcode').value = MODULE_TEMPLATE;
   renderModList();
+  // Shared-session links autorun: the person opening the link wants to see output.
+  if (restored && location.hash.startsWith('#s=')) {
+    window.addEventListener('load', () => setTimeout(() => runProgram(), 300));
+  }
 })();
