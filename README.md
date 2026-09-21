@@ -1,4 +1,4 @@
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=externum&fontSize=32&animation=fadeIn" width="100%" />
+<div align="center"><img src="https://raw.githubusercontent.com/BartoszOsiej/externum/main/logo-externum.png" width="150" alt="externum logo"/></div>
 
 <div align="center">
 

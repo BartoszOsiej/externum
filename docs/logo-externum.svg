@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Externum logo</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020617"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#818CF8"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="url(#bg)"/>
+  <g fill="none" stroke="url(#acc)" stroke-width="11" stroke-linecap="round">
+    <path d="M104 76 L64 128 L104 180"/>
+    <path d="M152 76 L192 128 L152 180"/>
+  </g>
+  <g fill="none" stroke="#E2E8F0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M112 104 L144 104 L112 128 L144 152"/>
+  </g>
+</svg>
