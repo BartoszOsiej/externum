@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Externum — one typed source, three backends that already exist</title>
 <meta name="description" content="Externum is a MIT-licensed, statically typed language that compiles to plain readable Python, standalone Bash, and a bytecode VM. ~380 tests, differential backend harness in CI, browser playground.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬢</text></svg>"><text y='.9em' font-size='90'>⬢</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬢</text></svg>">
 <link rel="canonical" href="https://bartoszosiej.github.io/externum/">
 <link rel="author" href="https://bartoszosiej.github.io/#person">
 <link rel="me" href="https://t.me/hartwell_info">
@@ -41,6 +41,8 @@
   --fg: #d6d6d6; --sub: #8b95a8; --slate: #4A5262;
   --rust: #F15A24; --blood: #DA2C38; --ok: #22c55e;
 }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPVmUsaaDhw.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 700; font-display: swap; src: url(https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxTOVOVmUsaaDhw.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body {
@@ -52,6 +54,7 @@ a { color: inherit; }
 .wrap { max-width: 1080px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
 
 header { border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(5,5,5,.92); backdrop-filter: blur(6px); z-index: 10; }
+.probanner { background: var(--rust); color: #050505; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-align: center; padding: 8px 16px; display: block; text-decoration: none; text-transform: uppercase; }
 .nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; }
 .nav .logo { color: var(--rust); font-weight: 700; font-size: 17px; letter-spacing: 1px; text-decoration: none; }
 .nav .links { display: flex; gap: 18px; flex-wrap: wrap; }
@@ -61,9 +64,9 @@ header { border-bottom: 1px solid var(--line); position: sticky; top: 0; backgro
 .hero { padding: clamp(60px, 12vw, 120px) 0 clamp(40px, 8vw, 80px); border-bottom: 1px solid var(--line); }
 .eyebrow { color: var(--sub); font-size: 12px; letter-spacing: 2px; }
 .eyebrow b { color: var(--ok); font-weight: 400; }
-h1 { font-size: clamp(38px, 9vw, 88px); line-height: .95; letter-spacing: -1px; font-weight: 700; margin: 18px 0 20px; }
+h1 { font-size: clamp(38px, 9vw, 88px); line-height: .98; letter-spacing: -1px; font-weight: 700; margin: 18px 0 20px; word-break: break-word; }
 h1 span { color: var(--rust); }
-.sub { max-width: 640px; color: var(--sub); font-size: 14px; }
+.sub { max-width: 640px; color: var(--sub); font-size: 15px; line-height: 1.7; }
 .sub b { color: var(--fg); font-weight: 400; }
 .cta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 32px; }
 .btn {
@@ -118,7 +121,7 @@ footer a:hover { color: var(--rust); }
 </style>
 </head>
 <body>
-<a class="probanner" href="https://buy.polar.sh/polar_cl_qR2GOfEhXRqlTlPICwyo8XVqKkXjv4mj15cq926Dh1F" style="display:block;background:var(--rust);color:#050505;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.06em;text-align:center;padding:10px 16px;text-decoration:none;text-transform:uppercase">▲ EXTERNUM PRO PACK — 10-page production guide — $29 (code LAUNCHWEEK, this week only) ▲</a>
+<a class="probanner" href="https://buy.polar.sh/polar_cl_qR2GOfEhXRqlTlPICwyo8XVqKkXjv4mj15cq926Dh1F">▲ EXTERNUM PRO PACK — $29 with code LAUNCHWEEK (this week only) ▲</a>
 <div style="display:flex;gap:14px;justify-content:center;padding:7px 10px;background:#0d0d12;font-family:inherit;font-size:11px;letter-spacing:.08em;text-transform:uppercase">
 <a href="https://dev.to/bartoszosiej/externum-launches-today-one-typed-source-python-bash-or-bytecode-with-honest-benchmarks-460n" style="color:#9aa0aa;text-decoration:none">📖 launch post</a>
 <a href="https://devhunt.org/tool/externum" style="color:#9aa0aa;text-decoration:none">🗳️ vote on devhunt</a>
