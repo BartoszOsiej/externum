@@ -10,7 +10,7 @@
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
-![PyPI](https://img.shields.io/badge/PyPI-externum%402.0.0-3776AB?style=flat-square&logo=pypi)
+![PyPI](https://img.shields.io/pypi/v/externum?style=flat-square&logo=pypi&logoColor=white)
 ![Tests](https://img.shields.io/badge/Tests-382%20✓-brightgreen?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](https://github.com/BartoszOsiej/externum/blob/main/LICENSE)
