@@ -128,7 +128,7 @@ w samym języku.
 ## Testy
 
 ```bash
-python3 -m unittest discover -s tests -v   # 379 testów
+python3 -m unittest discover -s tests -v   # 382 testów
 ```
 
 ## Struktura projektu
@@ -146,7 +146,7 @@ externum/
 lib/                  # Standardowa biblioteka (.ext) — w tym drm.ext
 lib/drm.ext           # DRM stdlib: sign / verify / watermark w Externum
 examples/             # hello, calc, pokedex, hardcore.ext
-tests/                # 379 testów jednostkowych
+tests/                # 382 testów jednostkowych
 docs/WIKI.md          # Specyfikacja języka
 ```
 

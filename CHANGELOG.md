@@ -2,6 +2,13 @@
 
 All notable changes to Externum will be documented in this file.
 
+## [4.2.2] - 2026-09-22
+
+### Changed
+- Packaging: the PyPI long description now reflects the current README
+  (includes the "Support the project" section with the Externum Pro Pack
+  and launch-week pricing). No code changes.
+
 ## [4.2.1] - 2026-09-19
 
 ### Added

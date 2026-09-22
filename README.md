@@ -11,7 +11,7 @@
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)
 ![PyPI](https://img.shields.io/badge/PyPI-externum%402.0.0-3776AB?style=flat-square&logo=pypi)
-![Tests](https://img.shields.io/badge/Tests-379%20✓-brightgreen?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-382%20✓-brightgreen?style=flat-square)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](https://github.com/BartoszOsiej/externum/blob/main/LICENSE)
 
@@ -288,7 +288,7 @@ docs/WIKI.md          # Language specification
 ## Tests
 
 ```bash
-python3 -m unittest discover -s tests -v   # 379 tests
+python3 -m unittest discover -s tests -v   # 382 tests
 ```
 
 ---
