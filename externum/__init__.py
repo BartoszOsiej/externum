@@ -14,7 +14,7 @@ One source compiles to EXBC bytecode and runs on the Externum VM,
 or can still be transpiled to Python for compatibility.
 """
 
-__version__ = "4.2.2"
+__version__ = "4.3.0"
 __codename__ = "Abyss"
 
 from .analysis import check, check_or_raise, preprocess

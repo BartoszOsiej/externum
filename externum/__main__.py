@@ -80,6 +80,25 @@ Examples:
     ide_p = sub.add_parser("ide", help="Launch the Externum TUI IDE")
     ide_p.add_argument("file", nargs="?", default=None, help="File to open (optional)")
 
+    tr_p = sub.add_parser(
+        "translate",
+        help="Translate Python or Rust source into Externum (.ext)",
+        description="Translate an existing Python or Rust file into Externum source (best-effort, warnings reported).",
+    )
+    tr_p.add_argument("file", help="Source file (.py or .rs)")
+    tr_p.add_argument("-o", "--output", default=None, help="Output .ext file (default: stdout)")
+    tr_p.add_argument(
+        "--lang",
+        choices=["python", "rust", "auto"],
+        default="auto",
+        help="Source language (default: detected from the extension)",
+    )
+    tr_p.add_argument(
+        "--report",
+        action="store_true",
+        help="Print the warning/coverage report to stderr",
+    )
+
     return p
 
 
@@ -98,6 +117,46 @@ def _read_source(path: str) -> str:
 # Last-read source text, so error handlers can render snippets without
 # re-reading the file (and work even if the file changed mid-run).
 _last_source: list[str] = [""]
+
+
+def cmd_translate(args) -> None:
+    """Translate Python/Rust source into Externum (.ext)."""
+    import os
+
+    from .translate import translate_python, translate_rust
+
+    lang = args.lang
+    if lang == "auto":
+        ext = os.path.splitext(args.file)[1].lower()
+        lang = {".py": "python", ".pyw": "python", ".rs": "rust"}.get(ext)
+        if lang is None:
+            print(f"Error: cannot detect language from extension '{ext}' — pass --lang python|rust", file=sys.stderr)
+            sys.exit(1)
+
+    source = _read_source(args.file)
+    try:
+        if lang == "python":
+            result, report = translate_python(source, filename=args.file)
+        else:
+            result, report = translate_rust(source, filename=args.file)
+    except SyntaxError as exc:
+        from .diagnostics import format_syntax_error
+
+        if lang == "python":
+            print(format_syntax_error(exc, source, filename=args.file), file=sys.stderr)
+        else:
+            print(f"SyntaxError: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as fh:
+            fh.write(result)
+        print(f"Output written to {args.output}")
+    else:
+        sys.stdout.write(result)
+    if args.report:
+        print(f"translation report for {args.file}:", file=sys.stderr)
+        print(report.summary(), file=sys.stderr)
 
 
 def cmd_run(args) -> None:
@@ -365,7 +424,7 @@ def main(argv=None) -> None:
     # Backwards compatible form: `externum file.ext [--target ...]`
     if (
         argv
-        and argv[0] not in ("run", "repl", "compile", "keygen", "check", "vm", "ide")
+        and argv[0] not in ("run", "repl", "compile", "keygen", "check", "vm", "ide", "translate")
         and not argv[0].startswith("-")
     ):
         argv = ["compile"] + argv
@@ -383,6 +442,8 @@ def main(argv=None) -> None:
         cmd_ide(args)
     elif args.command == "check":
         cmd_check(args)
+    elif args.command == "translate":
+        cmd_translate(args)
     else:
         cmd_compile(args)
 
