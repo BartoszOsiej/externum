@@ -47,3 +47,40 @@ class TestVMBytecode(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVMTryExcept(unittest.TestCase):
+    """try/except must catch Python-level runtime errors in the VM (not just
+    Externum-level RAISE_OP), including nested handlers."""
+
+    def test_catch_division_by_zero(self):
+        out = _run_vm(
+            "def main():\n"
+            "    try:\n"
+            "        print(1 // 0)\n"
+            "    except:\n"
+            "        print(\"caught\")\n"
+            "main()"
+        )
+        self.assertEqual(out, "caught")
+
+    def test_nested_reraise(self):
+        out = _run_vm(
+            "def main():\n"
+            "    try:\n"
+            "        try:\n"
+            "            print(\"inner\")\n"
+            "            print(1 // 0)\n"
+            "        except:\n"
+            "            print(\"inner caught\")\n"
+            "            raise\n"
+            "    except:\n"
+            "        print(\"outer caught\")\n"
+            "    print(\"done\")\n"
+            "main()"
+        )
+        self.assertEqual(out, "inner\ninner caught\nouter caught\ndone")
+
+    def test_no_except_still_raises(self):
+        with self.assertRaises(Exception):
+            _run_vm("def main():\n    print(1 // 0)\nmain()")

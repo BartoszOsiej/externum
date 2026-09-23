@@ -630,6 +630,8 @@ class VM:
         locals_ = dict(local_vars)
         try_depth = 0
         catch_ip = None
+        # stack of (catch_ip) for nested try blocks — innermost last
+        catch_stack: list[int] = []
         # Publish interpreter position for diagnostics (line mapping).
         outer_fn = self._current_fn
         outer_ip = self._current_ip
@@ -649,6 +651,7 @@ class VM:
             return val
 
         while ip < len(bytecode):
+          try:
             op = bytecode[ip]
             ip += 1
 
@@ -937,10 +940,13 @@ class VM:
 
             # ── exceptions ──
             elif op == TRY_BEGIN:
-                catch_ip = _read_u16()
+                catch_target = _read_u16()
+                catch_stack.append(catch_target)
                 try_depth += 1
             elif op == TRY_END:
                 try_depth = max(0, try_depth - 1)
+                if catch_stack:
+                    catch_stack.pop()
                 if try_depth == 0:
                     catch_ip = None
             elif op == RAISE_OP:
@@ -950,6 +956,8 @@ class VM:
                 raise exc
             elif op == POP_EXCEPT:
                 try_depth = max(0, try_depth - 1)
+                if catch_stack:
+                    catch_stack.pop()
                 if try_depth == 0:
                     catch_ip = None
 
@@ -1125,6 +1133,22 @@ class VM:
                 raise ExternumError(f"unknown opcode: 0x{op:02x} at ip={ip}")
 
             self._current_ip = ip
+          except Exception as exc:
+            # try/except support: a Python-level error (arithmetic, index,
+            # attribute, ...) inside a TRY_BEGIN block must unwind to the
+            # handler instead of killing the VM. Matches Externum-level
+            # RAISE_OP semantics (which raised straight through before).
+            if catch_stack:
+                stack.clear()
+                try_depth -= 1
+                target = catch_stack.pop()
+                self._current_ip = target
+                ip = target
+                # push the exception message so `except` handlers that bind
+                # a value (if later extended) can access it
+                stack.append(str(exc))
+                continue
+            raise
         return stack.pop() if stack else None
 
     # ── intrinsics ──────────────────────────────────────────────────
