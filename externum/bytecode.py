@@ -41,6 +41,7 @@ Opcodes:
   INTRINSIC=0xF0,
 """
 
+import ast as _pyast
 import struct
 from dataclasses import dataclass, field
 from typing import Any
@@ -1206,10 +1207,14 @@ class BytecodeCompiler:
                 depth += 1
             elif ch == "]":
                 depth -= 1
-        if bracket > 0:
+        if bracket >= 0:
             obj_name = val[:bracket].strip()
-            # Compile the object - could be dotted name or identifier
-            if "." in obj_name:
+            # Compile the object - literal, dotted name or identifier
+            if not obj_name:
+                pass  # shouldn't happen for INDEX nodes
+            elif obj_name.startswith(("'", '"')):
+                self._emit(LOAD_CONST, self._add_const(_pyast.literal_eval(obj_name)))
+            elif "." in obj_name:
                 parts = obj_name.rsplit(".", 1)
                 self._compile_name(parts[0])
                 self._emit(GET_ATTR, self._add_const(parts[1]))
