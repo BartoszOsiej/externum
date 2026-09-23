@@ -1,6 +1,8 @@
 """Externum package setup."""
 
 import os
+
+from externum import __version__
 from setuptools import setup, find_packages
 
 _long_description = ''
@@ -11,7 +13,7 @@ if os.path.isfile(_readme):
 
 setup(
     name="externum",
-    version="4.2.2",
+    version=__version__,
     description="A self-hosted programming language blending Python readability, binary performance, and Bash control",
     long_description=_long_description,
     long_description_content_type="text/markdown",
