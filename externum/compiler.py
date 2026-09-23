@@ -6,6 +6,14 @@ import re
 from .parser import ASTNode
 
 
+def _node_text(node) -> str:
+    """Cheap whole-node text dump for 'does top level reference main?' checks."""
+    parts = [str(node.value or "")]
+    for c in node.children:
+        parts.append(_node_text(c))
+    return " ".join(parts)
+
+
 class Compiler:
     def __init__(self, ast: list[ASTNode]):
         self.ast = ast
@@ -28,6 +36,19 @@ class Compiler:
 
         if self._has_bash():
             self.output["python"].insert(0, "import subprocess")
+
+        # v4.3: entrypoint — a module that defines main() but never calls it
+        # would exec silently (rc=0, zero output). If main is defined and the
+        # top level does not reference it, append an explicit `main()` call
+        # so `externum run` actually runs the program.
+        has_main = any(
+            n.type == "FUNCTION" and n.value == "main" for n in self.ast
+        )
+        if has_main and not any(
+            n.type != "FUNCTION" and "main" in _node_text(n) for n in self.ast
+        ):
+            self.output["python"].append("if __name__ == '__main__':")
+            self.output["python"].append("    main()")
 
         parts = {
             "python": "\n".join(self.output["python"]),

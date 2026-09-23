@@ -518,7 +518,20 @@ class VM:
         self._modules[module.name] = module
         self._current_module = module
         self._current_fn = None
-        return self._execute(module.bytecode, module.constants, {}, module.functions)
+        result = self._execute(module.bytecode, module.constants, {}, module.functions)
+        # v4.3 entrypoint: a module that defines main() but never calls it
+        # (no top-level reference) would exit silently after definition-only
+        # execution. Match the python backend: define everything, then call
+        # main() if it exists and wasn't referenced at the top level.
+        main_fn = next(
+            (f for f in module.functions if f.name == "main"), None
+        )
+        if main_fn is not None and not self._main_was_called:
+            result = self.run_function(main_fn, [], fn_obj=main_fn)
+        return result
+
+    #: set by _execute when the top-level bytecode actually references main
+    _main_was_called: bool = False
 
     def run_function(
         self,
@@ -670,6 +683,8 @@ class VM:
             elif op == LOAD_GLOBAL:
                 idx = _read_u16()
                 name = constants[idx]
+                if name == "main" and self._current_fn is None:
+                    self._main_was_called = True
                 if name in self._globals:
                     stack.append(self._globals[name])
                 elif name in locals_:
