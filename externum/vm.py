@@ -95,6 +95,7 @@ from .bytecode import (
     RSHIFT,
     SET_ATTR,
     SET_INDEX,
+    SLICE,
     STORE_DEREF,
     STORE_GLOBAL,
     STORE_MUT,
@@ -919,6 +920,16 @@ class VM:
                 idx = stack.pop()
                 obj = stack.pop()
                 stack.append(obj[idx])
+            elif op == SLICE:
+                # compiler pushes: obj, start, stop[, step]; None = missing.
+                # operand (u16) = number of pushed values: 3 (no step) or 4.
+                n = _read_u16()
+                if n == 4:
+                    step = stack.pop(); stop = stack.pop(); start = stack.pop(); obj = stack.pop()
+                    stack.append(obj[start:stop:step])
+                else:
+                    stop = stack.pop(); start = stack.pop(); obj = stack.pop()
+                    stack.append(obj[start:stop])
             elif op == SET_INDEX:
                 idx = stack.pop()
                 val = stack.pop()

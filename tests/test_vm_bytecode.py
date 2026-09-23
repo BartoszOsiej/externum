@@ -84,3 +84,19 @@ class TestVMTryExcept(unittest.TestCase):
     def test_no_except_still_raises(self):
         with self.assertRaises(Exception):
             _run_vm("def main():\n    print(1 // 0)\nmain()")
+
+
+class TestVMSlices(unittest.TestCase):
+    """Slices (a:b, a:b:c, missing bounds) must work in the VM backend
+    identically to the Python backend."""
+
+    def test_basic_slice(self):
+        self.assertEqual(_run_vm('def main():\n    print("Hello World"[0:5])\nmain()'), "Hello")
+
+    def test_list_slice(self):
+        out = _run_vm("def main():\n    xs = [1, 2, 3, 4]\n    print(xs[1:3])\nmain()")
+        self.assertEqual(out, "[2, 3]")
+
+    def test_slice_with_step(self):
+        out = _run_vm("def main():\n    xs = [1, 2, 3, 4, 5, 6]\n    print(xs[::2])\n    print(xs[4:1:-1])\nmain()")
+        self.assertEqual(out, "[1, 3, 5]\n[5, 4, 3]")

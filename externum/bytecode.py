@@ -1217,6 +1217,20 @@ class BytecodeCompiler:
                 self._compile_name(obj_name)
             # Compile the index expression
             idx_expr = val[bracket + 1 : -1].strip()
+            # Slice support: a:b / a:b:c -> build via SLICE opcode with
+            # components on the stack (missing parts -> None)
+            if ":" in idx_expr and not idx_expr.startswith('"') and not idx_expr.startswith("'"):
+                segs = idx_expr.split(":")
+                if 2 <= len(segs) <= 3:
+                    for seg in segs:
+                        seg = seg.strip()
+                        if seg:
+                            self._compile_simple_expr(seg)
+                        else:
+                            self._emit(LOAD_CONST, self._add_const(None))
+                    # SLICE carries operand = number of pushed values (3 or 4)
+                    self._emit(SLICE, len(segs) + 1)
+                    return
             self._compile_simple_expr(idx_expr)
             self._emit(GET_INDEX)
 
