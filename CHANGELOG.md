@@ -2,6 +2,31 @@
 
 All notable changes to Externum will be documented in this file.
 
+## [4.3.0] - 2026-09-23
+
+### Added
+- **`externum translate`** — source-to-source translation into Externum:
+  - `externum translate file.py` (py2ext): AST-based Python→Externum with type
+    inference for the strict declaration syntax (`x: Int = ...`), f-strings →
+    `"$"..."`, `if __name__ == "__main__"` hoisted into `main()` (auto-run),
+    stdlib import warnings, `--report` for a warning/coverage summary
+  - `externum translate file.rs` (rs2ext): heuristic Rust→Externum — `fn`/`let`,
+    `struct`, `impl` → class, `match` arms → `case`, `println!`/`format!` →
+    `print`/`$"..."`, `vec!`, type mapping (`Vec<f64>` → `List[Float]`, ...)
+  - both are best-effort: anything unmapped is reported as a warning, never
+    silently mangled; 28 new tests round-trip output through the real compiler
+
+### Fixed
+- **bare generator expressions in call arguments** — `sum(x for x in xs)` used
+  to compile to invalid Python (`sum(x, for, x in xs)`); the parser now
+  recognises the `FOR` clause in call args and emits a proper comprehension
+- **classes used inside functions on the VM** — a module-level class was stored
+  with `STORE_VAR`, which lands in the frame locals and is invisible to function
+  bodies (`undefined global `X``); module-level classes now store via
+  `STORE_GLOBAL`, matching the function path and the Python backend
+- the VM raises a clear "the bytecode VM does not support comprehensions yet"
+  error instead of a confusing `undefined global `(p`` for textual comprehensions
+
 ## [4.2.2] - 2026-09-22
 
 ### Changed

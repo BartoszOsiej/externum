@@ -533,7 +533,14 @@ class BytecodeCompiler:
 
         # Store class name
         idx = self._add_const(name)
-        self._emit(STORE_VAR, idx)
+        # At module level the class lives in VM globals: STORE_VAR at top
+        # level lands in the frame's `locals_` dict, which a function body
+        # cannot see ("undefined global `X`"). STORE_GLOBAL matches the
+        # function path above and the Python backend's semantics.
+        if self._current_fn is None:
+            self._emit(STORE_GLOBAL, idx)
+        else:
+            self._emit(STORE_VAR, idx)
         self._declare_var(name)
 
         # Now set each method on the class
@@ -1150,6 +1157,16 @@ class BytecodeCompiler:
         if val == "[]":
             self._emit(MAKE_LIST, 0)
             return
+        # Comprehensions arrive as verbatim text (`[x for x in xs]`). The VM
+        # has no comprehension opcodes; compiling the clause string as a
+        # simple expression used to fail with a confusing "undefined global
+        # `(p`". Raise a clear, actionable error instead.
+        if " for " in val or " if " in val:
+            raise SyntaxError(
+                "the bytecode VM does not support comprehensions yet — "
+                "run with the default backend (`externum run file.ext`), "
+                "or rewrite as an explicit loop"
+            )
         # Parse items from string
         items = self._parse_list_items(val[1:-1]) if val.startswith("[") else []
         for item in items:

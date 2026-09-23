@@ -1271,6 +1271,17 @@ class Parser:
                 args.append(ASTNode("DSTAR", children=[self._parse_expression()]))
                 continue
             arg = self._parse_expression()
+            # bare generator expression: `sum(x for x in xs)` (v4.2.3).
+            # Without this, the FOR token after the first expression leaked
+            # into the next argument and codegen produced invalid Python
+            # like `sum(x, for, x in xs)`.
+            if self.pos < len(self.tokens) and self.tokens[self.pos].type == "FOR" and arg.type != "CALL":
+                self.report_genexpr = True
+                comp = self._parse_comprehension_clauses(arg)
+                self._skip_newlines()
+                self._expect("RPAREN")
+                args.append(ASTNode("LIST", value=f"[{comp}]"))
+                break
             if self.pos < len(self.tokens) and self.tokens[self.pos].type == "ASSIGN" and arg.type == "IDENTIFIER":
                 self.pos += 1
                 val = self._parse_expression()
