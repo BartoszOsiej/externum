@@ -19,6 +19,14 @@ setup(
     long_description_content_type="text/markdown",
     author="Bartosz Osiej",
     url="https://github.com/BartoszOsiej/externum",
+    project_urls={
+        "Homepage": "https://github.com/BartoszOsiej/externum",
+        "Repository": "https://github.com/BartoszOsiej/externum",
+        "Issues": "https://github.com/BartoszOsiej/externum/issues",
+        "Changelog": "https://github.com/BartoszOsiej/externum/blob/main/CHANGELOG.md",
+        "Documentation": "https://bartoszosiej.github.io/externum/",
+        "Organization": "https://hartwell-labs.github.io/",
+    },
     license="MIT",
     packages=find_packages(),
     entry_points={

@@ -2,6 +2,13 @@
 
 All notable changes to Externum will be documented in this file.
 
+## [4.3.1] - 2026-09-25
+
+### Changed
+- packaging: full PyPI `project_urls` (Repository, Issues, Changelog,
+  Documentation, Organization) so registry pages link to the live docs site
+  and the Hartwell Labs org; no code changes
+
 ## [4.3.0] - 2026-09-23
 
 ### Added
