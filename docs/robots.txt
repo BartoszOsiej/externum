@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://bartoszosiej.github.io/externum/sitemap.xml
+Sitemap: https://hartwell-labs.pl/externum/sitemap.xml

@@ -96,7 +96,7 @@ jobs:
             head -c 3500 <<< "$OUTPUT"
             echo '```'
             echo ""
-            echo "<sub>externum \$(python3 -c 'from externum import __version__; print(__version__)') · sandboxed runner · 30 s timeout · try it live: https://bartoszosiej.github.io/externum/</sub>"
+            echo "<sub>externum \$(python3 -c 'from externum import __version__; print(__version__)') · sandboxed runner · 30 s timeout · try it live: https://hartwell-labs.pl/externum/</sub>"
           } > body.md
           gh issue comment $NUMBER --body-file body.md
 
@@ -208,6 +208,6 @@ jobs:
           {
             echo "@${ACTOR} module \`${NAME}\` passed validation and is up for review: $PR_URL"
             echo ""
-            echo "Once merged, \`import ${NAME}\` works for **everyone** — including the [web playground](https://bartoszosiej.github.io/externum/), which loads the stdlib live from main."
+            echo "Once merged, \`import ${NAME}\` works for **everyone** — including the [web playground](https://hartwell-labs.pl/externum/), which loads the stdlib live from main."
           } > body.md
           gh issue comment $NUMBER --body-file body.md

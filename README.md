@@ -25,7 +25,7 @@ Externum = Python_readability ⊕ Binary_performance ⊕ Bash_control
 > 🇵🇱 [Wersja polska](README.pl.md) · [Documentation](https://bartoszosiej.github.io/Docs/projects/externum/) · [Language Spec](docs/WIKI.md) · [![Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/BartoszOsiej/externum)
 
 <p align="center">
-  <a href="https://bartoszosiej.github.io/externum/"><b>▶ Try in your browser — no install</b></a>
+  <a href="https://hartwell-labs.pl/externum/"><b>▶ Try in your browser — no install</b></a>
 </p>
 
 <p align="center">
@@ -60,7 +60,7 @@ Linux 7.2.4-arch1-2
 
 ---
 
-🌐 **[▶ Try Externum in your browser — no install](https://bartoszosiej.github.io/externum/)** · or `pip install externum`
+🌐 **[▶ Try Externum in your browser — no install](https://hartwell-labs.pl/externum/)** · or `pip install externum`
 
 ---
 
@@ -209,7 +209,7 @@ runs inside [Pyodide](https://pyodide.org/) (Python compiled to WASM):
 externum repl
 
 # Or open the browser playground:
-https://bartoszosiej.github.io/externum/
+https://hartwell-labs.pl/externum/
 ```
 
 | What works | What doesn't (browser sandbox) |
