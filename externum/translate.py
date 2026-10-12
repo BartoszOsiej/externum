@@ -28,7 +28,6 @@ import copy
 import re
 from dataclasses import dataclass, field
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared reporting
 # ─────────────────────────────────────────────────────────────────────────────
@@ -130,10 +129,8 @@ class _Py2Ext(ast.NodeVisitor):
             return node
 
         class _Swap(ast.NodeTransformer):
-            def visit_JoinedStr(self, n: ast.JoinedStr) -> ast.expr:  # noqa: N802
-                return ast.copy_location(
-                    ast.Name(id=self.conv._fstr_placeholder(n), ctx=ast.Load()), n
-                )
+            def visit_JoinedStr(self, n: ast.JoinedStr) -> ast.expr:
+                return ast.copy_location(ast.Name(id=self.conv._fstr_placeholder(n), ctx=ast.Load()), n)
 
         swapper = _Swap()
         swapper.conv = self
@@ -197,7 +194,7 @@ class _Py2Ext(ast.NodeVisitor):
         if isinstance(value, ast.Tuple):
             return "Tuple"
         if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id in _PY2EXT_TYPES:
-            return _PY2EXT_TYPES[value.func.id].capitalize() if value.func.id == "str" else _PY2EXT_TYPES[value.func.id].capitalize()
+            return _PY2EXT_TYPES[value.func.id].capitalize()
         if isinstance(value, ast.BinOp):
             lt, rt = self._infer(value.left), self._infer(value.right)
             if isinstance(value.op, ast.Add) and (lt == "Str" or rt == "Str"):
@@ -314,7 +311,9 @@ class _Py2Ext(ast.NodeVisitor):
             self.report.warn("async function translated as sync (Externum has no async yet)", stmt.lineno)
         args = stmt.args
         if args.vararg or args.kwarg or args.kwonlyargs:
-            self.report.warn(f"*args/**kwargs on '{stmt.name}' dropped — Externum functions are fixed-arity", stmt.lineno)
+            self.report.warn(
+                f"*args/**kwargs on '{stmt.name}' dropped — Externum functions are fixed-arity", stmt.lineno
+            )
         params = []
         defaults = [""] * (len(args.args) - len(args.defaults)) + [ast.unparse(d) for d in args.defaults]
         for arg, default in zip(args.args, defaults):
@@ -333,7 +332,9 @@ class _Py2Ext(ast.NodeVisitor):
         self._docstring_comment(stmt)
         outer, self._scope = self._scope, set()
         self.indent += 1
-        if not stmt.body or (len(stmt.body) == 1 and isinstance(stmt.body[0], ast.Pass) and not ast.get_docstring(stmt)):
+        if not stmt.body or (
+            len(stmt.body) == 1 and isinstance(stmt.body[0], ast.Pass) and not ast.get_docstring(stmt)
+        ):
             self._emit("pass")
         else:
             for s in stmt.body:
@@ -428,7 +429,9 @@ class _Py2Ext(ast.NodeVisitor):
 
     def _with(self, stmt: ast.With) -> None:
         items = ", ".join(
-            f"{self._expr(i.context_expr)} as {ast.unparse(i.optional_vars)}" if i.optional_vars else self._expr(i.context_expr)
+            f"{self._expr(i.context_expr)} as {ast.unparse(i.optional_vars)}"
+            if i.optional_vars
+            else self._expr(i.context_expr)
             for i in stmt.items
         )
         self._emit(f"with {items}:")
@@ -445,7 +448,9 @@ class _Py2Ext(ast.NodeVisitor):
         for alias in stmt.names:
             top = alias.name.split(".")[0]
             if top not in _KNOWN_EXTERNUM_STDLIB:
-                self.report.warn(f"import {alias.name}: not part of the Externum stdlib — runtime import may fail", stmt.lineno)
+                self.report.warn(
+                    f"import {alias.name}: not part of the Externum stdlib — runtime import may fail", stmt.lineno
+                )
             if alias.asname:
                 self._emit(f"import {alias.name} as {alias.asname}")
             else:
@@ -458,7 +463,9 @@ class _Py2Ext(ast.NodeVisitor):
             self.report.warn("relative import — not supported, skipped", stmt.lineno)
             return
         if mod.split(".")[0] not in _KNOWN_EXTERNUM_STDLIB:
-            self.report.warn(f"from {mod} import ...: not part of the Externum stdlib — runtime import may fail", stmt.lineno)
+            self.report.warn(
+                f"from {mod} import ...: not part of the Externum stdlib — runtime import may fail", stmt.lineno
+            )
         names = ", ".join(f"{a.name} as {a.asname}" if a.asname else a.name for a in stmt.names)
         self._emit(f"from {mod} import {names}")
         for a in stmt.names:
@@ -549,7 +556,7 @@ def translate_python(source: str, filename: str = "<source>") -> tuple[str, Tran
     conv.visit_Module(tree)
     header = ["# Translated from Python by `externum translate` (py2ext)"]
     if hoisted:
-        header.append("# `if __name__ == \"__main__\"` hoisted into main() — Externum auto-runs it")
+        header.append('# `if __name__ == "__main__"` hoisted into main() — Externum auto-runs it')
     return _py_str_requote(conv.finish()), conv.report
 
 
@@ -558,10 +565,24 @@ def translate_python(source: str, filename: str = "<source>") -> tuple[str, Tran
 # ─────────────────────────────────────────────────────────────────────────────
 
 _RS_TYPE_MAP = {
-    "i8": "Int", "i16": "Int", "i32": "Int", "i64": "Int", "i128": "Int", "isize": "Int",
-    "u8": "Int", "u16": "Int", "u32": "Int", "u64": "Int", "u128": "Int", "usize": "Int",
-    "f32": "Float", "f64": "Float",
-    "bool": "Bool", "char": "Str", "str": "Str", "String": "Str",
+    "i8": "Int",
+    "i16": "Int",
+    "i32": "Int",
+    "i64": "Int",
+    "i128": "Int",
+    "isize": "Int",
+    "u8": "Int",
+    "u16": "Int",
+    "u32": "Int",
+    "u64": "Int",
+    "u128": "Int",
+    "usize": "Int",
+    "f32": "Float",
+    "f64": "Float",
+    "bool": "Bool",
+    "char": "Str",
+    "str": "Str",
+    "String": "Str",
 }
 
 _RS_METHOD_MAP = [
@@ -703,7 +724,7 @@ class _Rs2Ext:
 
     def _macro(self, line: str) -> str:
         """println!/print!/format!/eprintln! → print / $"..."."""
-        m = re.match(r'(eprintln!|eprint!|println!|print!|format!)\s*\((.*)\)\s*;?\s*$', line)
+        m = re.match(r"(eprintln!|eprint!|println!|print!|format!)\s*\((.*)\)\s*;?\s*$", line)
         if not m:
             return line
         macro, raw = m.group(1), m.group(2)
@@ -723,8 +744,8 @@ class _Rs2Ext:
         if args[1:] or fmt.endswith("\\n") or "\n" not in fmt:
             pass
         if macro in ("println!", "eprintln!"):
-            return f'print($"' + text + '")' if args[1:] else f'print("{text}")'
-        return f'print($"' + text + '")' if args[1:] else f'print("{text}")'
+            return 'print($"' + text + '")' if args[1:] else f'print("{text}")'
+        return 'print($"' + text + '")' if args[1:] else f'print("{text}")'
 
     def _let(self, line: str) -> str:
         m = re.match(r"let\s+(mut\s+)?(_\s+)?([\w]+)\s*(?::\s*([^=]+?))?\s*=\s*(.+?)\s*;?\s*$", line)
@@ -754,9 +775,11 @@ class _Rs2Ext:
         # single-line `Name { field: value, ... }` → `Name(field=value, ...)`
         return re.sub(
             r"\b([A-Z]\w*)\s*\{\s*([^{}]+?)\s*\}",
-            lambda m: f"{m.group(1)}({', '.join(f.strip().replace(': ', '=', 1) for f in m.group(2).split(','))})"
-            if ":" in m.group(2)
-            else m.group(0),
+            lambda m: (
+                f"{m.group(1)}({', '.join(f.strip().replace(': ', '=', 1) for f in m.group(2).split(','))})"
+                if ":" in m.group(2)
+                else m.group(0)
+            ),
             line,
         )
 

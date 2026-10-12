@@ -524,9 +524,7 @@ class VM:
         # (no top-level reference) would exit silently after definition-only
         # execution. Match the python backend: define everything, then call
         # main() if it exists and wasn't referenced at the top level.
-        main_fn = next(
-            (f for f in module.functions if f.name == "main"), None
-        )
+        main_fn = next((f for f in module.functions if f.name == "main"), None)
         if main_fn is not None and not self._main_was_called:
             result = self.run_function(main_fn, [], fn_obj=main_fn)
         return result
@@ -652,514 +650,521 @@ class VM:
             return val
 
         while ip < len(bytecode):
-          try:
-            op = bytecode[ip]
-            ip += 1
+            try:
+                op = bytecode[ip]
+                ip += 1
 
-            if op == NOP:
-                continue
-            elif op == HALT:
-                break
-            elif op == RETURN:
-                if stack:
-                    return stack.pop()
-                return None
-            elif op == YIELD_VAL:
-                return _GeneratorSentinel
+                if op == NOP:
+                    continue
+                elif op == HALT:
+                    break
+                elif op == RETURN:
+                    if stack:
+                        return stack.pop()
+                    return None
+                elif op == YIELD_VAL:
+                    return _GeneratorSentinel
 
-            # ── load/store ──
-            elif op == LOAD_CONST:
-                idx = _read_u16()
-                stack.append(constants[idx])
-            elif op == LOAD_VAR:
-                idx = _read_u16()
-                name = constants[idx]
-                if name in locals_:
-                    stack.append(locals_[name])
-                elif name in self._globals:
-                    stack.append(self._globals[name])
-                else:
-                    raise ExternumError(f"undefined variable `{name}`")
-            elif op == STORE_VAR or op == STORE_MUT:
-                idx = _read_u16()
-                name = constants[idx]
-                locals_[name] = stack.pop()
-            elif op == LOAD_GLOBAL:
-                idx = _read_u16()
-                name = constants[idx]
-                if name == "main" and self._current_fn is None:
-                    self._main_was_called = True
-                if name in self._globals:
-                    stack.append(self._globals[name])
-                elif name in locals_:
-                    stack.append(locals_[name])
-                else:
-                    raise ExternumError(f"undefined global `{name}`")
-            elif op == STORE_GLOBAL:
-                idx = _read_u16()
-                name = constants[idx]
-                self._globals[name] = stack.pop()
-
-            # ── stack manipulation ──
-            elif op == POP:
-                stack.pop()
-            elif op == DUP:
-                stack.append(stack[-1])
-            elif op == SWAP:
-                a, b = stack.pop(), stack.pop()
-                stack.append(a)
-                stack.append(b)
-
-            # ── arithmetic ──
-            elif op == ADD:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a + b)
-            elif op == SUB:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a - b)
-            elif op == MUL:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a * b)
-            elif op == DIV:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a / b)
-            elif op == MOD:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a % b)
-            elif op == POW:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a**b)
-            elif op == FLOOR_DIV:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a // b)
-            elif op == NEG:
-                a = stack.pop()
-                stack.append(-a)
-            elif op == NOT:
-                a = stack.pop()
-                stack.append(not a)
-            elif op == BITAND:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a & b)
-            elif op == BITOR:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a | b)
-            elif op == BITXOR:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a ^ b)
-            elif op == BITNOT:
-                a = stack.pop()
-                stack.append(~a)
-            elif op == LSHIFT:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a << b)
-            elif op == RSHIFT:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a >> b)
-
-            # ── comparison ──
-            elif op == EQ:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a == b)
-            elif op == NEQ:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a != b)
-            elif op == LT:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a < b)
-            elif op == GT:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a > b)
-            elif op == LTE:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a <= b)
-            elif op == GTE:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a >= b)
-            elif op == AND:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a and b)
-            elif op == OR:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a or b)
-            elif op == IN_OP:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a in b)
-            elif op == IS_OP:
-                b, a = stack.pop(), stack.pop()
-                stack.append(a is b)
-
-            # ── jumps ──
-            elif op == JUMP:
-                ip = _read_u16()
-            elif op == JUMP_IF:
-                cond = stack.pop()
-                if cond:
-                    ip = _read_u16()
-                else:
-                    ip += 2
-            elif op == JUMP_IF_NOT:
-                cond = stack.pop()
-                if not cond:
-                    ip = _read_u16()
-                else:
-                    ip += 2
-            elif op == JUMP_IF_POP:
-                cond = stack[-1]
-                if not cond:
-                    ip = _read_u16()
-                    stack.pop()
-                else:
-                    ip += 2
-
-            # ── calls ──
-            elif op == CALL:
-                argc = _read_u8()
-                args = []
-                for _ in range(argc):
-                    args.insert(0, stack.pop())
-                fn = stack.pop()
-                if isinstance(fn, ExternumBoundMethod):
-                    stack.append(self.run_function(fn.closure.fn, [fn.instance] + args, upvalues=fn.closure.upvalues))
-                elif callable(fn):
-                    stack.append(fn(*args))
-                elif isinstance(fn, ExternumClosure):
-                    stack.append(self.run_function(fn.fn, args, upvalues=fn.upvalues))
-                elif isinstance(fn, BytecodeFunction):
-                    stack.append(self.run_function(fn, args, fn_obj=fn))
-                elif isinstance(fn, ExternumClass):
-                    instance = ExternumInstance(fn)
-                    if "__init__" in fn.methods:
-                        init_fn = fn.methods["__init__"]
-                        if isinstance(init_fn, ExternumClosure):
-                            self.run_function(init_fn.fn, [instance] + args, upvalues=init_fn.upvalues)
-                        elif isinstance(init_fn, BytecodeFunction):
-                            self.run_function(init_fn, [instance] + args)
-                    stack.append(instance)
-                elif isinstance(fn, ExternumStruct):
-                    # Struct instantiation
-                    typename = object.__getattribute__(fn, "__typename") if hasattr(fn, "__typename") else "Struct"
-                    fields = object.__getattribute__(fn, "__fields") if hasattr(fn, "__fields") else {}
-                    stack.append(fn)
-                elif isinstance(fn, ExternumResult) or isinstance(fn, ExternumOption):
-                    stack.append(fn)
-                else:
-                    raise ExternumError(f"cannot call {fn!r}")
-
-            elif op == MAKE_FN:
-                idx = _read_u16()
-                fn = all_fns[idx]
-                closure = ExternumClosure(fn, dict(locals_))
-                stack.append(closure)
-                self._fns_by_name[fn.name] = fn  # diagnostics: line lookup
-
-            elif op == MAKE_CLASS:
-                idx = _read_u16()
-                name = constants[idx]
-                stack.append(ExternumClass(name, {}))
-
-            # ── containers ──
-            elif op == MAKE_LIST:
-                count = _read_u16()
-                items = []
-                for _ in range(count):
-                    items.insert(0, stack.pop())
-                stack.append(items)
-            elif op == MAKE_DICT:
-                count = _read_u16()
-                items = {}
-                for _ in range(count):
-                    v, k = stack.pop(), stack.pop()
-                    items[k] = v
-                stack.append(items)
-            elif op == MAKE_TUPLE:
-                count = _read_u16()
-                items = []
-                for _ in range(count):
-                    items.insert(0, stack.pop())
-                stack.append(tuple(items))
-            elif op == MAKE_SET:
-                count = _read_u16()
-                items = set()
-                for _ in range(count):
-                    items.add(stack.pop())
-                stack.append(items)
-            elif op == UNPACK:
-                count = _read_u16()
-                val = stack.pop()
-                for i in range(count):
-                    stack.append(val[i] if i < len(val) else None)
-
-            # ── attribute/index access ──
-            elif op == GET_ATTR:
-                idx = _read_u16()
-                name = constants[idx]
-                obj = stack.pop()
-                if isinstance(obj, ExternumStruct) or isinstance(obj, ExternumEnum):
-                    stack.append(obj.__getattr__(name))
-                elif isinstance(obj, dict):
-                    stack.append(obj[name])
-                else:
-                    stack.append(getattr(obj, name))
-            elif op == SET_ATTR:
-                idx = _read_u16()
-                name = constants[idx]
-                val = stack.pop()
-                obj = stack.pop()
-                if isinstance(obj, ExternumStruct):
-                    obj.__setattr__(name, val)
-                elif isinstance(obj, ExternumInstance):
-                    obj.attrs[name] = val
-                elif isinstance(obj, ExternumClass):
-                    obj.methods[name] = val
-                elif isinstance(obj, dict):
-                    obj[name] = val
-                else:
-                    setattr(obj, name, val)
-            elif op == GET_INDEX:
-                idx = stack.pop()
-                obj = stack.pop()
-                stack.append(obj[idx])
-            elif op == SLICE:
-                # compiler pushes: obj, start, stop[, step]; None = missing.
-                # operand (u16) = number of pushed values: 3 (no step) or 4.
-                n = _read_u16()
-                if n == 4:
-                    step = stack.pop(); stop = stack.pop(); start = stack.pop(); obj = stack.pop()
-                    stack.append(obj[start:stop:step])
-                else:
-                    stop = stack.pop(); start = stack.pop(); obj = stack.pop()
-                    stack.append(obj[start:stop])
-            elif op == SET_INDEX:
-                idx = stack.pop()
-                val = stack.pop()
-                obj = stack.pop()
-                obj[idx] = val
-
-            # ── loops ──
-            elif op == FOR_ITER:
-                target = _read_u16()
-                iterator = stack[-1]
-                try:
-                    val = next(iterator)
-                    stack.append(val)
-                except StopIteration:
-                    stack.pop()
-                    ip = target
-            elif op == LOOP_BREAK:
-                ip = _read_u16()
-
-            # ── exceptions ──
-            elif op == TRY_BEGIN:
-                catch_target = _read_u16()
-                catch_stack.append(catch_target)
-                try_depth += 1
-            elif op == TRY_END:
-                try_depth = max(0, try_depth - 1)
-                if catch_stack:
-                    catch_stack.pop()
-                if try_depth == 0:
-                    catch_ip = None
-            elif op == RAISE_OP:
-                exc = stack.pop() if stack else RuntimeError("raise")
-                if isinstance(exc, str):
-                    exc = RuntimeError(exc)
-                raise exc
-            elif op == POP_EXCEPT:
-                try_depth = max(0, try_depth - 1)
-                if catch_stack:
-                    catch_stack.pop()
-                if try_depth == 0:
-                    catch_ip = None
-
-            # ── basic ──
-            elif op == ALLOC:
-                value = stack.pop() if stack else None
-                stack.append(self._heap.alloc(value))
-            elif op == FREE:
-                pid = stack.pop()
-                self._heap.free(pid)
-            elif op == LOAD_DEREF:
-                pid = stack.pop()
-                index = stack.pop() if stack else 0
-                stack.append(self._heap.load(pid, index))
-            elif op == STORE_DEREF:
-                value = stack.pop()
-                pid = stack.pop()
-                index = stack.pop() if stack else 0
-                self._heap.store(pid, value, index)
-
-            # ── advanced ──
-            elif op == MAKE_STRUCT:
-                name_idx = _read_u16()
-                field_count = _read_u8()
-                name = constants[name_idx]
-                # Create a callable struct type (not an instance)
-                field_names = [f"field{i}" for i in range(field_count)]
-
-                def _make_struct_factory(_n=name, _fn=field_names):
-                    def _factory(*args):
-                        fields = dict(zip(_fn, args))
-                        return ExternumStruct(_n, fields)
-
-                    return _factory
-
-                stack.append(_make_struct_factory())
-            elif op == MAKE_ENUM:
-                name_idx = _read_u16()
-                variant_count = _read_u8()
-                name = constants[name_idx]
-
-                # Create class with dynamic variant access
-                class _EnumMeta(type):
-                    def __getattr__(cls, vname):
-                        if vname.startswith("_"):
-                            raise AttributeError(vname)
-
-                        def factory(v=None):
-                            return ExternumEnum(name, vname, v)
-
-                        return factory
-
-                stack.append(_EnumMeta(name, (), {"__qualname__": name}))
-            elif op == ENUM_VARIANT:
-                variant_idx = _read_u16()
-                variant = constants[variant_idx]
-                data = stack.pop() if stack else None
-                stack.append(ExternumEnum("<enum>", variant, data))
-            elif op == ENUM_IS:
-                variant_idx = _read_u16()
-                variant = constants[variant_idx]
-                obj = stack.pop()
-                stack.append(isinstance(obj, ExternumEnum) and obj.variant == variant)
-            elif op == ENUM_UNWRAP:
-                obj = stack.pop()
-                stack.append(obj.data if isinstance(obj, ExternumEnum) else obj)
-
-            elif op == PIPE_CALL:
-                # pipe: a |> f  → stack has [a, f], call f(a)
-                # (v4.2: user-defined functions and closures route through the
-                # same dispatch as CALL instead of raising "cannot call".)
-                fn = stack.pop()
-                arg = stack.pop()
-                if isinstance(fn, ExternumClosure):
-                    stack.append(self.run_function(fn.fn, [arg], upvalues=fn.upvalues))
-                elif isinstance(fn, BytecodeFunction):
-                    stack.append(self.run_function(fn, [arg], fn_obj=fn))
-                elif callable(fn):
-                    stack.append(fn(arg))
-                else:
-                    raise ExternumError(f"pipe: cannot call {fn!r}")
-            elif op == AWAIT_OP:
-                # Simplified: just return the value
-                pass
-            elif op == DEFER_PUSH:
-                fn_idx = _read_u16()
-                fn = all_fns[fn_idx]
-                if self._defer_stack:
-                    self._defer_stack[-1].append(fn)
-                else:
-                    self._defer_stack.append([fn])
-
-            elif op == OPTION_SOME:
-                val = stack.pop()
-                stack.append(ExternumOption(True, val))
-            elif op == OPTION_NONE:
-                stack.append(ExternumOption(False, None))
-            elif op == RESULT_OK:
-                val = stack.pop()
-                stack.append(ExternumResult(True, val))
-            elif op == RESULT_ERR:
-                val = stack.pop()
-                stack.append(ExternumResult(False, val))
-
-            # ── intrinsics ──
-            elif op == INTRINSIC:
-                code = _read_u16()
-                argc = _read_u8()
-                args = []
-                for _ in range(argc):
-                    args.insert(0, stack.pop())
-                stack.append(self._call_intrinsic(code, args))
-
-            elif op == ASSERT_EQ:
-                val = stack.pop()
-                if not val:
-                    raise AssertionError(f"assertion failed: {val!r}")
-
-            elif op == PANIC:
-                msg = stack.pop() if stack else "panic"
-                raise ExternumError(f"panic: {msg}")
-            elif op == UNREACHABLE:
-                raise ExternumError("reached unreachable code")
-            elif op == TRACE_OP:
-                val = stack.pop()
-                self._stderr.write(f"[TRACE] {val!r}\n")
-            elif op == DBG_OP:
-                val = stack.pop()
-                self._stderr.write(f"[DBG] {val!r} = {val!r}\n")
-                stack.append(val)
-
-            elif op == IMPORT:
-                name_idx = _read_u16()
-                import_str = constants[name_idx]
-
-                # Parse: 'import X', 'import X, Y, Z', 'from X import Y', 'from X import Y as Z'
-                def _import_to_target(mod_name):
-                    """Import a module and return (short_name, module_object)."""
-                    mod_obj = self._vm_import(mod_name.strip())
-                    return mod_name.strip().split(".")[0], mod_obj
-
-                def _store(name, val):
-                    if fn_name != "<module>":
-                        locals_[name] = val
+                # ── load/store ──
+                elif op == LOAD_CONST:
+                    idx = _read_u16()
+                    stack.append(constants[idx])
+                elif op == LOAD_VAR:
+                    idx = _read_u16()
+                    name = constants[idx]
+                    if name in locals_:
+                        stack.append(locals_[name])
+                    elif name in self._globals:
+                        stack.append(self._globals[name])
                     else:
-                        self._globals[name] = val
+                        raise ExternumError(f"undefined variable `{name}`")
+                elif op == STORE_VAR or op == STORE_MUT:
+                    idx = _read_u16()
+                    name = constants[idx]
+                    locals_[name] = stack.pop()
+                elif op == LOAD_GLOBAL:
+                    idx = _read_u16()
+                    name = constants[idx]
+                    if name == "main" and self._current_fn is None:
+                        self._main_was_called = True
+                    if name in self._globals:
+                        stack.append(self._globals[name])
+                    elif name in locals_:
+                        stack.append(locals_[name])
+                    else:
+                        raise ExternumError(f"undefined global `{name}`")
+                elif op == STORE_GLOBAL:
+                    idx = _read_u16()
+                    name = constants[idx]
+                    self._globals[name] = stack.pop()
 
-                if import_str.startswith("import "):
-                    raw = import_str[7:].strip()
-                    # Handle comma-separated: import os, sys, json
-                    for item in raw.split(","):
-                        item = item.strip()
-                        if not item:
-                            continue
-                        short, mod_obj = _import_to_target(item)
-                        _store(short, mod_obj)
-                elif import_str.startswith("from "):
-                    rest = import_str[5:].strip()
-                    parts = rest.split(" import ")
-                    mod_name = parts[0].strip()
-                    imports = parts[1].strip() if len(parts) > 1 else ""
-                    mod_obj = self._vm_import(mod_name)
-                    for imp in imports.split(","):
-                        imp = imp.strip()
-                        if " as " in imp:
-                            real, alias = imp.split(" as ")
-                            _store(alias.strip(), getattr(mod_obj, real.strip()))
+                # ── stack manipulation ──
+                elif op == POP:
+                    stack.pop()
+                elif op == DUP:
+                    stack.append(stack[-1])
+                elif op == SWAP:
+                    a, b = stack.pop(), stack.pop()
+                    stack.append(a)
+                    stack.append(b)
+
+                # ── arithmetic ──
+                elif op == ADD:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a + b)
+                elif op == SUB:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a - b)
+                elif op == MUL:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a * b)
+                elif op == DIV:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a / b)
+                elif op == MOD:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a % b)
+                elif op == POW:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a**b)
+                elif op == FLOOR_DIV:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a // b)
+                elif op == NEG:
+                    a = stack.pop()
+                    stack.append(-a)
+                elif op == NOT:
+                    a = stack.pop()
+                    stack.append(not a)
+                elif op == BITAND:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a & b)
+                elif op == BITOR:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a | b)
+                elif op == BITXOR:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a ^ b)
+                elif op == BITNOT:
+                    a = stack.pop()
+                    stack.append(~a)
+                elif op == LSHIFT:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a << b)
+                elif op == RSHIFT:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a >> b)
+
+                # ── comparison ──
+                elif op == EQ:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a == b)
+                elif op == NEQ:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a != b)
+                elif op == LT:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a < b)
+                elif op == GT:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a > b)
+                elif op == LTE:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a <= b)
+                elif op == GTE:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a >= b)
+                elif op == AND:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a and b)
+                elif op == OR:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a or b)
+                elif op == IN_OP:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a in b)
+                elif op == IS_OP:
+                    b, a = stack.pop(), stack.pop()
+                    stack.append(a is b)
+
+                # ── jumps ──
+                elif op == JUMP:
+                    ip = _read_u16()
+                elif op == JUMP_IF:
+                    cond = stack.pop()
+                    if cond:
+                        ip = _read_u16()
+                    else:
+                        ip += 2
+                elif op == JUMP_IF_NOT:
+                    cond = stack.pop()
+                    if not cond:
+                        ip = _read_u16()
+                    else:
+                        ip += 2
+                elif op == JUMP_IF_POP:
+                    cond = stack[-1]
+                    if not cond:
+                        ip = _read_u16()
+                        stack.pop()
+                    else:
+                        ip += 2
+
+                # ── calls ──
+                elif op == CALL:
+                    argc = _read_u8()
+                    args = []
+                    for _ in range(argc):
+                        args.insert(0, stack.pop())
+                    fn = stack.pop()
+                    if isinstance(fn, ExternumBoundMethod):
+                        stack.append(
+                            self.run_function(fn.closure.fn, [fn.instance] + args, upvalues=fn.closure.upvalues)
+                        )
+                    elif callable(fn):
+                        stack.append(fn(*args))
+                    elif isinstance(fn, ExternumClosure):
+                        stack.append(self.run_function(fn.fn, args, upvalues=fn.upvalues))
+                    elif isinstance(fn, BytecodeFunction):
+                        stack.append(self.run_function(fn, args, fn_obj=fn))
+                    elif isinstance(fn, ExternumClass):
+                        instance = ExternumInstance(fn)
+                        if "__init__" in fn.methods:
+                            init_fn = fn.methods["__init__"]
+                            if isinstance(init_fn, ExternumClosure):
+                                self.run_function(init_fn.fn, [instance] + args, upvalues=init_fn.upvalues)
+                            elif isinstance(init_fn, BytecodeFunction):
+                                self.run_function(init_fn, [instance] + args)
+                        stack.append(instance)
+                    elif isinstance(fn, ExternumStruct):
+                        # Struct instantiation
+                        typename = object.__getattribute__(fn, "__typename") if hasattr(fn, "__typename") else "Struct"
+                        fields = object.__getattribute__(fn, "__fields") if hasattr(fn, "__fields") else {}
+                        stack.append(fn)
+                    elif isinstance(fn, ExternumResult) or isinstance(fn, ExternumOption):
+                        stack.append(fn)
+                    else:
+                        raise ExternumError(f"cannot call {fn!r}")
+
+                elif op == MAKE_FN:
+                    idx = _read_u16()
+                    fn = all_fns[idx]
+                    closure = ExternumClosure(fn, dict(locals_))
+                    stack.append(closure)
+                    self._fns_by_name[fn.name] = fn  # diagnostics: line lookup
+
+                elif op == MAKE_CLASS:
+                    idx = _read_u16()
+                    name = constants[idx]
+                    stack.append(ExternumClass(name, {}))
+
+                # ── containers ──
+                elif op == MAKE_LIST:
+                    count = _read_u16()
+                    items = []
+                    for _ in range(count):
+                        items.insert(0, stack.pop())
+                    stack.append(items)
+                elif op == MAKE_DICT:
+                    count = _read_u16()
+                    items = {}
+                    for _ in range(count):
+                        v, k = stack.pop(), stack.pop()
+                        items[k] = v
+                    stack.append(items)
+                elif op == MAKE_TUPLE:
+                    count = _read_u16()
+                    items = []
+                    for _ in range(count):
+                        items.insert(0, stack.pop())
+                    stack.append(tuple(items))
+                elif op == MAKE_SET:
+                    count = _read_u16()
+                    items = set()
+                    for _ in range(count):
+                        items.add(stack.pop())
+                    stack.append(items)
+                elif op == UNPACK:
+                    count = _read_u16()
+                    val = stack.pop()
+                    for i in range(count):
+                        stack.append(val[i] if i < len(val) else None)
+
+                # ── attribute/index access ──
+                elif op == GET_ATTR:
+                    idx = _read_u16()
+                    name = constants[idx]
+                    obj = stack.pop()
+                    if isinstance(obj, ExternumStruct) or isinstance(obj, ExternumEnum):
+                        stack.append(obj.__getattr__(name))
+                    elif isinstance(obj, dict):
+                        stack.append(obj[name])
+                    else:
+                        stack.append(getattr(obj, name))
+                elif op == SET_ATTR:
+                    idx = _read_u16()
+                    name = constants[idx]
+                    val = stack.pop()
+                    obj = stack.pop()
+                    if isinstance(obj, ExternumStruct):
+                        obj.__setattr__(name, val)
+                    elif isinstance(obj, ExternumInstance):
+                        obj.attrs[name] = val
+                    elif isinstance(obj, ExternumClass):
+                        obj.methods[name] = val
+                    elif isinstance(obj, dict):
+                        obj[name] = val
+                    else:
+                        setattr(obj, name, val)
+                elif op == GET_INDEX:
+                    idx = stack.pop()
+                    obj = stack.pop()
+                    stack.append(obj[idx])
+                elif op == SLICE:
+                    # compiler pushes: obj, start, stop[, step]; None = missing.
+                    # operand (u16) = number of pushed values: 3 (no step) or 4.
+                    n = _read_u16()
+                    if n == 4:
+                        step = stack.pop()
+                        stop = stack.pop()
+                        start = stack.pop()
+                        obj = stack.pop()
+                        stack.append(obj[start:stop:step])
+                    else:
+                        stop = stack.pop()
+                        start = stack.pop()
+                        obj = stack.pop()
+                        stack.append(obj[start:stop])
+                elif op == SET_INDEX:
+                    idx = stack.pop()
+                    val = stack.pop()
+                    obj = stack.pop()
+                    obj[idx] = val
+
+                # ── loops ──
+                elif op == FOR_ITER:
+                    target = _read_u16()
+                    iterator = stack[-1]
+                    try:
+                        val = next(iterator)
+                        stack.append(val)
+                    except StopIteration:
+                        stack.pop()
+                        ip = target
+                elif op == LOOP_BREAK:
+                    ip = _read_u16()
+
+                # ── exceptions ──
+                elif op == TRY_BEGIN:
+                    catch_target = _read_u16()
+                    catch_stack.append(catch_target)
+                    try_depth += 1
+                elif op == TRY_END:
+                    try_depth = max(0, try_depth - 1)
+                    if catch_stack:
+                        catch_stack.pop()
+                    if try_depth == 0:
+                        catch_ip = None
+                elif op == RAISE_OP:
+                    exc = stack.pop() if stack else RuntimeError("raise")
+                    if isinstance(exc, str):
+                        exc = RuntimeError(exc)
+                    raise exc
+                elif op == POP_EXCEPT:
+                    try_depth = max(0, try_depth - 1)
+                    if catch_stack:
+                        catch_stack.pop()
+                    if try_depth == 0:
+                        catch_ip = None
+
+                # ── basic ──
+                elif op == ALLOC:
+                    value = stack.pop() if stack else None
+                    stack.append(self._heap.alloc(value))
+                elif op == FREE:
+                    pid = stack.pop()
+                    self._heap.free(pid)
+                elif op == LOAD_DEREF:
+                    pid = stack.pop()
+                    index = stack.pop() if stack else 0
+                    stack.append(self._heap.load(pid, index))
+                elif op == STORE_DEREF:
+                    value = stack.pop()
+                    pid = stack.pop()
+                    index = stack.pop() if stack else 0
+                    self._heap.store(pid, value, index)
+
+                # ── advanced ──
+                elif op == MAKE_STRUCT:
+                    name_idx = _read_u16()
+                    field_count = _read_u8()
+                    name = constants[name_idx]
+                    # Create a callable struct type (not an instance)
+                    field_names = [f"field{i}" for i in range(field_count)]
+
+                    def _make_struct_factory(_n=name, _fn=field_names):
+                        def _factory(*args):
+                            fields = dict(zip(_fn, args))
+                            return ExternumStruct(_n, fields)
+
+                        return _factory
+
+                    stack.append(_make_struct_factory())
+                elif op == MAKE_ENUM:
+                    name_idx = _read_u16()
+                    variant_count = _read_u8()
+                    name = constants[name_idx]
+
+                    # Create class with dynamic variant access
+                    class _EnumMeta(type):
+                        def __getattr__(cls, vname):
+                            if vname.startswith("_"):
+                                raise AttributeError(vname)
+
+                            def factory(v=None):
+                                return ExternumEnum(name, vname, v)
+
+                            return factory
+
+                    stack.append(_EnumMeta(name, (), {"__qualname__": name}))
+                elif op == ENUM_VARIANT:
+                    variant_idx = _read_u16()
+                    variant = constants[variant_idx]
+                    data = stack.pop() if stack else None
+                    stack.append(ExternumEnum("<enum>", variant, data))
+                elif op == ENUM_IS:
+                    variant_idx = _read_u16()
+                    variant = constants[variant_idx]
+                    obj = stack.pop()
+                    stack.append(isinstance(obj, ExternumEnum) and obj.variant == variant)
+                elif op == ENUM_UNWRAP:
+                    obj = stack.pop()
+                    stack.append(obj.data if isinstance(obj, ExternumEnum) else obj)
+
+                elif op == PIPE_CALL:
+                    # pipe: a |> f  → stack has [a, f], call f(a)
+                    # (v4.2: user-defined functions and closures route through the
+                    # same dispatch as CALL instead of raising "cannot call".)
+                    fn = stack.pop()
+                    arg = stack.pop()
+                    if isinstance(fn, ExternumClosure):
+                        stack.append(self.run_function(fn.fn, [arg], upvalues=fn.upvalues))
+                    elif isinstance(fn, BytecodeFunction):
+                        stack.append(self.run_function(fn, [arg], fn_obj=fn))
+                    elif callable(fn):
+                        stack.append(fn(arg))
+                    else:
+                        raise ExternumError(f"pipe: cannot call {fn!r}")
+                elif op == AWAIT_OP:
+                    # Simplified: just return the value
+                    pass
+                elif op == DEFER_PUSH:
+                    fn_idx = _read_u16()
+                    fn = all_fns[fn_idx]
+                    if self._defer_stack:
+                        self._defer_stack[-1].append(fn)
+                    else:
+                        self._defer_stack.append([fn])
+
+                elif op == OPTION_SOME:
+                    val = stack.pop()
+                    stack.append(ExternumOption(True, val))
+                elif op == OPTION_NONE:
+                    stack.append(ExternumOption(False, None))
+                elif op == RESULT_OK:
+                    val = stack.pop()
+                    stack.append(ExternumResult(True, val))
+                elif op == RESULT_ERR:
+                    val = stack.pop()
+                    stack.append(ExternumResult(False, val))
+
+                # ── intrinsics ──
+                elif op == INTRINSIC:
+                    code = _read_u16()
+                    argc = _read_u8()
+                    args = []
+                    for _ in range(argc):
+                        args.insert(0, stack.pop())
+                    stack.append(self._call_intrinsic(code, args))
+
+                elif op == ASSERT_EQ:
+                    val = stack.pop()
+                    if not val:
+                        raise AssertionError(f"assertion failed: {val!r}")
+
+                elif op == PANIC:
+                    msg = stack.pop() if stack else "panic"
+                    raise ExternumError(f"panic: {msg}")
+                elif op == UNREACHABLE:
+                    raise ExternumError("reached unreachable code")
+                elif op == TRACE_OP:
+                    val = stack.pop()
+                    self._stderr.write(f"[TRACE] {val!r}\n")
+                elif op == DBG_OP:
+                    val = stack.pop()
+                    self._stderr.write(f"[DBG] {val!r} = {val!r}\n")
+                    stack.append(val)
+
+                elif op == IMPORT:
+                    name_idx = _read_u16()
+                    import_str = constants[name_idx]
+
+                    # Parse: 'import X', 'import X, Y, Z', 'from X import Y', 'from X import Y as Z'
+                    def _import_to_target(mod_name):
+                        """Import a module and return (short_name, module_object)."""
+                        mod_obj = self._vm_import(mod_name.strip())
+                        return mod_name.strip().split(".")[0], mod_obj
+
+                    def _store(name, val):
+                        if fn_name != "<module>":
+                            locals_[name] = val
                         else:
-                            _store(imp, getattr(mod_obj, imp))
+                            self._globals[name] = val
 
-            else:
+                    if import_str.startswith("import "):
+                        raw = import_str[7:].strip()
+                        # Handle comma-separated: import os, sys, json
+                        for item in raw.split(","):
+                            item = item.strip()
+                            if not item:
+                                continue
+                            short, mod_obj = _import_to_target(item)
+                            _store(short, mod_obj)
+                    elif import_str.startswith("from "):
+                        rest = import_str[5:].strip()
+                        parts = rest.split(" import ")
+                        mod_name = parts[0].strip()
+                        imports = parts[1].strip() if len(parts) > 1 else ""
+                        mod_obj = self._vm_import(mod_name)
+                        for imp in imports.split(","):
+                            imp = imp.strip()
+                            if " as " in imp:
+                                real, alias = imp.split(" as ")
+                                _store(alias.strip(), getattr(mod_obj, real.strip()))
+                            else:
+                                _store(imp, getattr(mod_obj, imp))
+
+                else:
+                    self._current_ip = ip
+                    raise ExternumError(f"unknown opcode: 0x{op:02x} at ip={ip}")
+
                 self._current_ip = ip
-                raise ExternumError(f"unknown opcode: 0x{op:02x} at ip={ip}")
-
-            self._current_ip = ip
-          except Exception as exc:
-            # try/except support: a Python-level error (arithmetic, index,
-            # attribute, ...) inside a TRY_BEGIN block must unwind to the
-            # handler instead of killing the VM. Matches Externum-level
-            # RAISE_OP semantics (which raised straight through before).
-            if catch_stack:
-                stack.clear()
-                try_depth -= 1
-                target = catch_stack.pop()
-                self._current_ip = target
-                ip = target
-                # push the exception message so `except` handlers that bind
-                # a value (if later extended) can access it
-                stack.append(str(exc))
-                continue
-            raise
+            except Exception as exc:
+                # try/except support: a Python-level error (arithmetic, index,
+                # attribute, ...) inside a TRY_BEGIN block must unwind to the
+                # handler instead of killing the VM. Matches Externum-level
+                # RAISE_OP semantics (which raised straight through before).
+                if catch_stack:
+                    stack.clear()
+                    try_depth -= 1
+                    target = catch_stack.pop()
+                    self._current_ip = target
+                    ip = target
+                    # push the exception message so `except` handlers that bind
+                    # a value (if later extended) can access it
+                    stack.append(str(exc))
+                    continue
+                raise
         return stack.pop() if stack else None
 
     # ── intrinsics ──────────────────────────────────────────────────

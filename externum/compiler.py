@@ -41,12 +41,8 @@ class Compiler:
         # would exec silently (rc=0, zero output). If main is defined and the
         # top level does not reference it, append an explicit `main()` call
         # so `externum run` actually runs the program.
-        has_main = any(
-            n.type == "FUNCTION" and n.value == "main" for n in self.ast
-        )
-        if has_main and not any(
-            n.type != "FUNCTION" and "main" in _node_text(n) for n in self.ast
-        ):
+        has_main = any(n.type == "FUNCTION" and n.value == "main" for n in self.ast)
+        if has_main and not any(n.type != "FUNCTION" and "main" in _node_text(n) for n in self.ast):
             self.output["python"].append("if __name__ == '__main__':")
             self.output["python"].append("    main()")
 

@@ -43,9 +43,7 @@ class BashCodegen:
     def generate(self) -> tuple[str, list[str]]:
         self.lines.append("#!/usr/bin/env bash")
         self.lines.append("set -euo pipefail")
-        has_main = any(
-            n.type == "FUNCTION" and n.value == "main" for n in self.ast
-        )
+        has_main = any(n.type == "FUNCTION" and n.value == "main" for n in self.ast)
         main_referenced = False
         if has_main:
             # If any non-FUNCTION top-level statement references main, the
@@ -64,7 +62,7 @@ class BashCodegen:
         return "\n".join(self.lines) + "\n", self.warnings
 
     @staticmethod
-    def _text(node: "ASTNode") -> str:
+    def _text(node: ASTNode) -> str:
         parts = [str(node.value or "")]
         for c in node.children:
             parts.append(BashCodegen._text(c))
