@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from externum import Lexer, Parser, Compiler
+from externum import Compiler, Lexer, Parser
 from externum.translate import translate_python, translate_rust
 
 

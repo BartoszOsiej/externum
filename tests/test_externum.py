@@ -16,7 +16,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from externum import Lexer, Parser, Compiler, Runtime  # noqa: E402
+from externum import Compiler, Lexer, Parser, Runtime
 
 
 def compile_all(source):

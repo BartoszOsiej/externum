@@ -4,7 +4,6 @@ algebraic types, struct/enum, pipe operator, defer, loop, and more.
 Run with:  python3 -m unittest tests/test_v4.py -v
 """
 
-import contextlib
 import io
 import os
 import sys
@@ -12,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from externum import Lexer, Parser, BytecodeCompiler, VM
+from externum import VM, BytecodeCompiler, Lexer, Parser
 
 
 def run_vm(source, argv=None):

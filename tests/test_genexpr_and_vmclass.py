@@ -16,7 +16,7 @@ from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from externum import BytecodeCompiler, Compiler, Lexer, Parser, VM
+from externum import VM, Compiler, Lexer, Parser
 
 
 def compile_python_target(src: str) -> str:

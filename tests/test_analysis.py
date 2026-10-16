@@ -12,8 +12,8 @@ import contextlib
 import io
 import unittest
 
+from externum.analysis import MacroError, preprocess
 from externum.runtime import Runtime
-from externum.analysis import preprocess, MacroError
 from externum.typesys import ExternumTypeError
 
 RT = Runtime()

@@ -17,7 +17,7 @@ from ..analysis import check_or_raise, preprocess
 from ..compiler import Compiler
 from ..lexer import Lexer
 from ..parser import Parser
-from .rtlib import externum_globals
+from .rtlib import externum_globals, _MAX_FREED, _MAX_HEAP_SLOTS, _MAX_THREADS, _freed_ids
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

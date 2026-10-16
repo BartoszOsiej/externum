@@ -19,20 +19,64 @@ _ext_next_id = itertools.count(1)
 _SIZEOF = {"Int": 8, "Float": 8, "Str": 16, "Bool": 1, "Ptr": 8}
 
 
+# ---------------------------------------------------------------------------
+# Resource-bounded executor for the dynamic language.
+#
+# Externum v4 is self-hosted: user-supplied programs execute here.  A
+# resource-bounded executor shrinks the blast radius of untrusted input, which
+# is exactly the class of bug this repository is built to catch.  The values
+# below are deliberately conservative and are NOT lowered silently in future
+# releases without a deliberate decision.
+# ---------------------------------------------------------------------------
+_MAX_HEAP_SLOTS = 65536     # total heap cells the VM may hold at once
+_MAX_THREADS = 16            # concurrently executing _ext_spawn workers
+_MAX_FREED = 1024            # retained so double-free / re-free can be caught
+_heap_lock = threading.RLock()       # serialises heap + counter edits
+_heap_count = 0                      # live heap slots
+_freed_ids = set()                   # ids eligible for re-free
+_thread_pool = queue.Queue()         # running _ext_spawn workers
+
+
+def _bounded(f):
+    """Thin guard: fail-closed on over-run.  Internal-only; callers are trusted."""
+    def wrapper(*a, **kw):
+        with _heap_lock:
+            if _heap_count >= _MAX_HEAP_SLOTS:
+                raise RuntimeError("alloc: heap exhausted")
+            if _thread_pool.qsize() >= _MAX_THREADS:
+                raise RuntimeError("spawn: thread cap reached")
+            n = f(*a, **kw)
+        return n
+    return wrapper
+
+
 def _ext_alloc(type_name="Any", count=1):
     """Allocate `count` slots of `type_name`. Returns an opaque pointer id."""
+    global _heap_count, _freed_ids
     if count < 1:
         raise RuntimeError(f"alloc: count must be >= 1, got {count}")
-    pid = next(_ext_next_id)
-    _ext_heap[pid] = {"type": type_name, "count": count, "values": [None] * count}
+    with _heap_lock:
+        if _heap_count + count > _MAX_HEAP_SLOTS:
+            raise RuntimeError("alloc: heap exhausted")
+        pid = next(_ext_next_id)
+        if pid in _freed_ids:
+            _freed_ids.remove(pid)
+        _ext_heap[pid] = {"type": type_name, "count": count, "values": [None] * count}
+        _heap_count += count
     return pid
 
 
 def _ext_free(pid):
     """Free a pointer. Double-free and free of unknown ids raise."""
-    slot = _ext_heap.pop(pid, None)
-    if slot is None:
-        raise RuntimeError(f"free: invalid or already-freed pointer {pid}")
+    global _heap_count, _freed_ids
+    with _heap_lock:
+        slot = _ext_heap.pop(pid, None)
+        if slot is None:
+            raise RuntimeError(f"free: invalid or already-freed pointer {pid}")
+        _heap_count -= slot["count"]
+        if len(_freed_ids) < _MAX_FREED:
+            _freed_ids.add(pid)
+    return pid
 
 
 def _ext_load(pid, index=0):
@@ -81,11 +125,18 @@ def _ext_recv(ch):
     return ch.get()
 
 
+@_bounded
 def _ext_spawn(fn):
-    """Run `fn` on a daemon thread."""
-    thread = threading.Thread(target=fn, daemon=True)
-    thread.start()
-    return thread
+    """Run `fn` on a daemon thread, capped by _MAX_THREADS."""
+    global _thread_pool
+    def _runner():
+        try:
+            fn()
+        finally:
+            _thread_pool.task_done()
+    _thread_pool.put(_runner)
+    threading.Thread(target=_runner, daemon=True).start()
+    return _thread_pool.qsize()
 
 
 def _ext_match_error(value):

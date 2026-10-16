@@ -88,7 +88,8 @@ main()
     def test_obfuscated_program_still_runs(self):
         code = drm.protect_python(self.SRC, APP, AUTHOR, self.SRC, secret=SECRET)
         ns = {'__name__': '__main__', '__file__': '<protected>'}
-        import io, contextlib
+        import contextlib
+        import io
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             exec(compile(code, '<protected>', 'exec'), ns)
@@ -104,7 +105,8 @@ main()
 """
 
     def _protect_run(self, license_key=None):
-        import contextlib, io
+        import contextlib
+        import io
         old = os.environ.get('EXTERNUM_LICENSE')
         if license_key is None:
             os.environ.pop('EXTERNUM_LICENSE', None)
@@ -163,7 +165,8 @@ class TestUnifiedKeyFormat(unittest.TestCase):
 
     @staticmethod
     def _run_capture(source: str) -> str:
-        import contextlib, io
+        import contextlib
+        import io
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             RT.run(source)
@@ -255,7 +258,7 @@ class TestEgsManifestTool(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertTrue(os.path.isfile(out_json))
         import json as _json
-        with open(out_json, 'r', encoding='utf-8') as fh:
+        with open(out_json, encoding='utf-8') as fh:
             data = _json.load(fh)
         names = {f['path'] for f in data['files']}
         self.assertIn('/game.exe', names)
@@ -282,7 +285,8 @@ class TestEgsManifestTool(unittest.TestCase):
 
 class TestCliSmoke(unittest.TestCase):
     def test_keygen_and_compile_cli(self):
-        import subprocess, sys
+        import subprocess
+        import sys
         # keygen
         out = subprocess.run(
             [sys.executable, '-m', 'externum', 'keygen',

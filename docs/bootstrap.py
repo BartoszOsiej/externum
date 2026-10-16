@@ -30,7 +30,7 @@ def ext_run(source):
         Runtime(search_roots=["/lib"]).run(source)
         return ("ok", buf.getvalue())
     except Exception as e:
-        return ("err", "{}: {}\n{}".format(type(e).__name__, e, buf.getvalue()))
+        return ("err", f"{type(e).__name__}: {e}\n{buf.getvalue()}")
     finally:
         sys.stdout, sys.stderr = old
 
@@ -45,22 +45,22 @@ def ext_compile(source, target):
         out = "\n".join(out)
     elif not isinstance(out, str):
         out = ""
-    return out if out.strip() else '# (target "{}" produced no output)'.format(target)
+    return out if out.strip() else f'# (target "{target}" produced no output)'
 
 
 def ext_install_module(name, code):
     safe = "".join(c for c in name if c.isalnum() or c == "_")
     if not safe or safe[0].isdigit():
         return ("err", "invalid module name")
-    with open("/lib/lib/{}.ext".format(safe), "w") as fh:
+    with open(f"/lib/lib/{safe}.ext", "w") as fh:
         fh.write(code)
     for m in [k for k in list(sys.modules) if k == safe]:
         del sys.modules[m]
-    return ("ok", "/lib/lib/{}.ext".format(safe))
+    return ("ok", f"/lib/lib/{safe}.ext")
 
 
 def ext_remove_module(name):
-    p = "/lib/lib/{}.ext".format(name)
+    p = f"/lib/lib/{name}.ext"
     if os.path.exists(p):
         os.remove(p)
         return ("ok", p)

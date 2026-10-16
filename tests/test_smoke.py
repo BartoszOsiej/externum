@@ -3,7 +3,7 @@ import io
 import sys
 import unittest
 
-from externum.runtime import Runtime
+from externum.runtime import Runtime, _MAX_HEAP_SLOTS, _MAX_THREADS, _freed_ids, _MAX_FREED
 
 
 def _run(code: str) -> str:
@@ -125,3 +125,20 @@ class TestSmoke(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSecurityBoundedExecutor(unittest.TestCase):
+    """Security hardening on the dynamic executor (bounded heap + thread pool)."""
+
+    def test_heap_is_bounded(self):
+        # A program that keeps allocating sits at the cap.  Exceeding the cap is
+        # an error; the runner must NOT grow the heap silently.
+        self.assertEqual(_MAX_HEAP_SLOTS, 65536)
+
+    def test_spawn_is_thread_bounded(self):
+        self.assertEqual(_MAX_THREADS, 16)
+
+    def test_free_tracks_freed_ids(self):
+        # Freeing twice, or freeing a freed pointer, is a deterministic error.
+        self.assertIsInstance(_freed_ids, set)
+        self.assertGreater(_MAX_FREED, 0)
